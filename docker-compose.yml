@@ -1,0 +1,42 @@
+# Best Practice: Use Docker Compose to define and run multi-container applications.
+# This file orchestrates the application and its Redis dependency for a production-like environment.
+
+version: '3.8'
+
+services:
+  # The Redis service
+  redis:
+    image: redis:7-alpine
+    container_name: poc-redis
+    # Best Practice: Always set a password for Redis in production.
+    command: redis-server --requirepass your-strong-password
+    ports:
+      - "6379:6379"
+    networks:
+      - poc-network
+
+  # The Application service
+  app:
+    # This tells Docker Compose to build the image from the Dockerfile in the current directory.
+    build: .
+    container_name: poc-app
+    ports:
+      - "8080:8080"
+    networks:
+      - poc-network
+    # Best Practice: Externalize configuration using environment variables.
+    # These values correspond to the `application-prod.yml` profile.
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - REDIS_HOST=redis # The service name `redis` is used as the hostname.
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=your-strong-password
+      # Note: DB_HOST, DB_USER, etc., would also be set here for a real database.
+    # This ensures the app only starts after the Redis service is ready.
+    depends_on:
+      - redis
+
+# Defines the network that allows containers to communicate with each other.
+networks:
+  poc-network:
+    driver: bridge
