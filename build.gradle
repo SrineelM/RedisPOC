@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.2.2'
     id 'io.spring.dependency-management' version '1.1.4'
+    id 'com.diffplug.spotless' version '6.25.0'
 }
 
 group = 'com.redis.poc'
@@ -33,9 +34,11 @@ dependencies {
     implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.3.0'
 
     // JWT
+    // JWT dependencies
     implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.13.0'
+    
 
     // Observability and Monitoring
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -43,6 +46,8 @@ dependencies {
     implementation 'io.micrometer:micrometer-tracing-bridge-brave'
     implementation 'io.zipkin.reporter2:zipkin-reporter-brave'
     // Note: Lettuce metrics binder removed because Spring Boot Actuator auto-configures Lettuce metrics
+
+   
 
     // Database Drivers
     runtimeOnly 'com.h2database:h2'
@@ -54,6 +59,7 @@ dependencies {
 
     // JSON Utilities
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    // Required lombok annotations - make sure these are correctly processed
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
@@ -62,6 +68,14 @@ dependencies {
 
     // EventStoreDB Java Client
     implementation 'com.eventstore:db-client-java:5.4.5'
+
+    // Spring Data Redis Lettuce connection factory and config
+    implementation 'org.springframework.data:spring-data-redis:3.2.2'
+    implementation 'org.apache.commons:commons-pool2:2.12.0'
+    
+    // Micrometer Lettuce Metrics
+    implementation 'io.micrometer:micrometer-core'
+    implementation 'io.micrometer:micrometer-observation'
 }
 
 tasks.named('test') {
@@ -70,4 +84,18 @@ tasks.named('test') {
 
 bootRun {
     args = ['--spring.profiles.active=dev']
+}
+
+spotless {
+    java {
+        palantirJavaFormat()
+        prettier().config(['tabWidth': 4])
+        importOrder()
+        // Do not block build on formatting errors
+        enforceCheck false
+    }
+}
+
+tasks.named('build') {
+    dependsOn 'spotlessApply'
 }
