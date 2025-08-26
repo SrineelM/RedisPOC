@@ -1,9 +1,9 @@
-package com.redis.poc.health;
 
+package com.redis.poc.health;
 import io.lettuce.core.api.StatefulRedisConnection;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.actuator.health.Health;
-import org.springframework.boot.actuator.health.HealthIndicator;
+import org.springframework.boot.actuate.health.AbstractHealthIndicator;
+import org.springframework.boot.actuate.health.Health;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -13,7 +13,7 @@ import java.util.Properties;
 
 @Component
 @Slf4j
-public class RedisHealthIndicator implements HealthIndicator {
+public class RedisHealthIndicator extends AbstractHealthIndicator {
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final StatefulRedisConnection<String, String> connection;
@@ -25,7 +25,7 @@ public class RedisHealthIndicator implements HealthIndicator {
     }
 
     @Override
-    public Health health() {
+    protected void doHealthCheck(Health.Builder builder) {
         try {
             Instant start = Instant.now();
             
@@ -35,10 +35,10 @@ public class RedisHealthIndicator implements HealthIndicator {
             Duration latency = Duration.between(start, Instant.now());
             
             if (!"PONG".equals(pingResult)) {
-                return Health.down()
-                        .withDetail("error", "Redis ping failed")
-                        .withDetail("response", pingResult)
-                        .build();
+                builder.down()
+                       .withDetail("error", "Redis ping failed")
+                       .withDetail("response", pingResult);
+                return;
             }
 
             // Get Redis info for additional health metrics
@@ -47,40 +47,35 @@ public class RedisHealthIndicator implements HealthIndicator {
                     .serverCommands()
                     .info();
 
-            Health.Builder healthBuilder = Health.up()
-                    .withDetail("ping", "PONG")
-                    .withDetail("latency", latency.toMillis() + "ms");
+            builder.up()
+                   .withDetail("ping", "PONG")
+                   .withDetail("latency", latency.toMillis() + "ms");
 
             // Add key Redis metrics
             if (info != null) {
-                healthBuilder
-                        .withDetail("redis_version", info.getProperty("redis_version"))
-                        .withDetail("used_memory_human", info.getProperty("used_memory_human"))
-                        .withDetail("connected_clients", info.getProperty("connected_clients"))
-                        .withDetail("uptime_in_seconds", info.getProperty("uptime_in_seconds"));
+                builder
+                    .withDetail("redis_version", info.getProperty("redis_version"))
+                    .withDetail("used_memory_human", info.getProperty("used_memory_human"))
+                    .withDetail("connected_clients", info.getProperty("connected_clients"))
+                    .withDetail("uptime_in_seconds", info.getProperty("uptime_in_seconds"));
             }
 
             // Check if latency is acceptable (warn if > 100ms, down if > 1000ms)
             if (latency.toMillis() > 1000) {
-                return healthBuilder
-                        .status("DOWN")
-                        .withDetail("warning", "High latency detected: " + latency.toMillis() + "ms")
-                        .build();
+                builder
+                    .status("DOWN")
+                    .withDetail("warning", "High latency detected: " + latency.toMillis() + "ms");
             } else if (latency.toMillis() > 100) {
-                return healthBuilder
-                        .status("UP")
-                        .withDetail("warning", "Elevated latency: " + latency.toMillis() + "ms")
-                        .build();
+                builder
+                    .status("UP")
+                    .withDetail("warning", "Elevated latency: " + latency.toMillis() + "ms");
             }
-
-            return healthBuilder.build();
 
         } catch (Exception e) {
             log.error("Redis health check failed", e);
-            return Health.down()
-                    .withDetail("error", e.getClass().getSimpleName())
-                    .withDetail("message", e.getMessage())
-                    .build();
+            builder.down()
+                   .withDetail("error", e.getClass().getSimpleName())
+                   .withDetail("message", e.getMessage());
         }
     }
 }

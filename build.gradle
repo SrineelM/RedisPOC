@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.2.2'
     id 'io.spring.dependency-management' version '1.1.4'
+    id 'com.diffplug.spotless' version '6.25.0'
 }
 
 group = 'com.redis.poc'
@@ -19,7 +20,7 @@ repositories {
 }
 
 dependencies {
-    // Spring Boot Starters for core functionalities
+    // Spring Boot Starters
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -27,49 +28,74 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
-
-    // Resilience4j for advanced patterns like Circuit Breaker, Bulkhead, etc.
-    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
-
-    // Security and JWT
     implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
-    implementation 'io.jsonwebtoken:jjwt-impl:0.12.3'
-    implementation 'io.jsonwebtoken:jjwt-jackson:0.12.3'
+
+    // Resilience4j - Fault Tolerance
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.3.0'
+
+    // JWT
+    // JWT dependencies
+    implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.13.0'
+    
 
     // Observability and Monitoring
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.micrometer:micrometer-registry-prometheus'
     implementation 'io.micrometer:micrometer-tracing-bridge-brave'
     implementation 'io.zipkin.reporter2:zipkin-reporter-brave'
-    // Lettuce metrics binder for Micrometer
-    implementation 'io.micrometer:micrometer-binder-lettuce:1.12.0'
+    // Note: Lettuce metrics binder removed because Spring Boot Actuator auto-configures Lettuce metrics
+
+   
 
     // Database Drivers
     runtimeOnly 'com.h2database:h2'
     runtimeOnly 'org.postgresql:postgresql'
 
-    // Redis Client - Lettuce is the default client in spring-boot-starter-data-redis
+    // Redis Client
     implementation 'io.lettuce:lettuce-core'
     implementation 'org.apache.commons:commons-pool2'
 
-    // Utilities
+    // JSON Utilities
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    // Required lombok annotations - make sure these are correctly processed
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 
-    // EventStoreDB Java client for advanced event sourcing
-    implementation 'com.eventstore:db-client-java:3.0.0' // Check for latest version
+    // EventStoreDB Java Client
+    implementation 'com.eventstore:db-client-java:5.4.5'
+
+    // Spring Data Redis Lettuce connection factory and config
+    implementation 'org.springframework.data:spring-data-redis:3.2.2'
+    implementation 'org.apache.commons:commons-pool2:2.12.0'
+    
+    // Micrometer Lettuce Metrics
+    implementation 'io.micrometer:micrometer-core'
+    implementation 'io.micrometer:micrometer-observation'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
 }
 
-// Set 'dev' as the default Spring profile for local runs
 bootRun {
     args = ['--spring.profiles.active=dev']
+}
+
+spotless {
+    java {
+        palantirJavaFormat()
+        prettier().config(['tabWidth': 4])
+        importOrder()
+        // Do not block build on formatting errors
+        enforceCheck false
+    }
+}
+
+tasks.named('build') {
+    dependsOn 'spotlessApply'
 }

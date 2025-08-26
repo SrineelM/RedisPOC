@@ -4,20 +4,31 @@ import io.lettuce.core.ClientOptions;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.SocketOptions;
 import io.lettuce.core.TimeoutOptions;
-import io.lettuce.core.cluster.ClusterClientOptions;
+import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.protocol.ProtocolVersion;
 import io.lettuce.core.resource.ClientResources;
 import io.lettuce.core.resource.DefaultClientResources;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.binder.lettuce.LettuceCommandLatencyRecorder;
-import io.micrometer.core.instrument.binder.lettuce.LettuceMetrics;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
+import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 
 import java.time.Duration;
 
+/**
+ * Unified Redis/Lettuce configuration combining connection pooling, 
+ * client options, and production-ready settings.
+ * 
+ * This configuration provides:
+ * - Production-ready Redis client with resilience patterns
+ * - Connection pooling with optimal settings
+ * - Stateful Redis connection for dedicated operations
+ * - Enhanced socket and timeout configurations
+ */
 @Configuration
 public class EnhancedLettuceConfig {
 
@@ -40,11 +51,10 @@ public class EnhancedLettuceConfig {
      * Enhanced ClientResources with observability and thread pool tuning
      */
     @Bean(destroyMethod = "shutdown")
-    public ClientResources clientResources(MeterRegistry meterRegistry) {
+    public ClientResources clientResources() {
         return DefaultClientResources.builder()
                 .ioThreadPoolSize(4)  // Tune based on load
                 .computationThreadPoolSize(4)  // Tune based on load
-                .commandLatencyRecorder(LettuceCommandLatencyRecorder.create(meterRegistry))
                 .build();
     }
 
@@ -70,7 +80,6 @@ public class EnhancedLettuceConfig {
                 .socketOptions(socketOptions)
                 .timeoutOptions(timeoutOptions)
                 .autoReconnect(true)
-                .cancelCommandsOnReconnectFailure(false)  // Keep commands in queue during reconnect
                 .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
                 .protocolVersion(ProtocolVersion.RESP3)  // Use latest protocol
                 .requestQueueSize(1000)  // Configure request queue size
@@ -87,12 +96,11 @@ public class EnhancedLettuceConfig {
      * Enhanced connection factory with connection pooling
      */
     @Bean
-    public LettuceConnectionFactory lettuceConnectionFactory(RedisClient redisClient) {
-        LettuceConnectionFactory factory = new LettuceConnectionFactory(redisClient, MutableRedisConfiguration.create());
+    public RedisConnectionFactory redisConnectionFactory(ClientResources clientResources) {
+        RedisStandaloneConfiguration redisConfig = new RedisStandaloneConfiguration(redisHost, redisPort);
         
         // Connection pool configuration
-        GenericObjectPoolConfig<StatefulRedisConnection<String, String>> poolConfig = 
-            new GenericObjectPoolConfig<>();
+        GenericObjectPoolConfig<?> poolConfig = new GenericObjectPoolConfig<>();
         poolConfig.setMaxTotal(20);
         poolConfig.setMaxIdle(10);
         poolConfig.setMinIdle(2);
@@ -100,13 +108,28 @@ public class EnhancedLettuceConfig {
         poolConfig.setTestOnReturn(true);
         poolConfig.setTestWhileIdle(true);
         poolConfig.setBlockWhenExhausted(true);
-        poolConfig.setMaxWaitMillis(timeout.toMillis());
+        poolConfig.setMaxWait(timeout);
         
-        factory.setPoolConfig(poolConfig);
+        LettucePoolingClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
+            .clientResources(clientResources)
+            .commandTimeout(timeout)
+            .poolConfig(poolConfig)
+            .build();
+        
+        LettuceConnectionFactory factory = new LettuceConnectionFactory(redisConfig, clientConfig);
         factory.setValidateConnection(true);
         factory.setShareNativeConnection(false);  // Better for high concurrency
         
         return factory;
+    }
+
+    /**
+     * Provides a stateful, thread-safe connection to Redis that will be shared across the application.
+     * A stateful connection is recommended when you need a dedicated connection that is not managed by a connection pool.
+     */
+    @Bean(destroyMethod = "close")
+    public StatefulRedisConnection<String, String> redisConnection(RedisClient redisClient) {
+        return redisClient.connect();
     }
 
     private String buildRedisUri() {
@@ -114,13 +137,5 @@ public class EnhancedLettuceConfig {
         uri.append(sslEnabled ? "rediss://" : "redis://");
         uri.append(redisHost).append(":").append(redisPort);
         return uri.toString();
-    }
-
-    /**
-     * Metrics integration for observability
-     */
-    @Bean
-    public LettuceMetrics lettuceMetrics(MeterRegistry meterRegistry) {
-        return LettuceMetrics.create(meterRegistry);
     }
 }
