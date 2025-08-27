@@ -4,6 +4,7 @@ import io.lettuce.core.ClientOptions;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.SocketOptions;
 import io.lettuce.core.TimeoutOptions;
+import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.protocol.ProtocolVersion;
 import io.lettuce.core.resource.ClientResources;
 import io.lettuce.core.resource.DefaultClientResources;
@@ -22,10 +23,10 @@ import org.springframework.data.redis.connection.lettuce.LettucePoolingClientCon
  * Provides a highly customized, production-grade configuration for the Lettuce Redis client.
  * This class overrides the default Spring Boot auto-configuration to enable advanced features
  * like connection pooling, fine-grained timeout settings, and resilience patterns.
- * This configuration is only active when the "local" Spring profile is enabled.
+ * This configuration is only active when the "dev" Spring profile is enabled.
  */
 @Configuration
-@Profile("local")
+@Profile("dev")
 public class EnhancedLettuceConfig {
 
     // Injects Redis connection details from application.properties or environment variables.
@@ -125,6 +126,15 @@ public class EnhancedLettuceConfig {
         factory.setShareNativeConnection(false);
 
         return factory;
+    }
+
+    /**
+     * Provides a stateful Redis connection bean for direct Lettuce operations.
+     * This is required for health checks and advanced use cases.
+     */
+    @Bean(destroyMethod = "close")
+    public StatefulRedisConnection<String, String> statefulRedisConnection(RedisClient redisClient) {
+        return redisClient.connect();
     }
 
     /**
