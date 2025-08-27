@@ -141,7 +141,7 @@ You can use a tool like `curl` or Postman to test the API endpoints.
 
 ## Acknowledgements
 
-This project was enhanced by analyzing and incorporating best practices from reference implementations. Thanks to the examples provided by **DeepSeek** and **ChatGPT** which served as valuable points of comparison and inspiration.
+This project was enhanced by analyzing and incorporating best practices from reference implementations. 
 
 # Redis POC - Developer Guide
 
@@ -219,4 +219,14 @@ Resilience4j annotations over `AdvancedLettuceClientService`. Configurable in `a
 - Implement security roles & fine-grained authorities.
 
 ## License
-POC - internal educational use. Add explicit license if publishing.
+No open-source license granted yet – All Rights Reserved.
+
+Permitted use: internal evaluation and educational experimentation only.
+Prohibited without an explicit license: external distribution, publication, commercial use, or incorporation into proprietary or open-source projects.
+
+Before any public release choose and add a proper LICENSE file (e.g. Apache-2.0, MIT, or another OSI-approved license) and update this section with:
+1. Chosen license name and SPDX identifier
+2. Copyright notice (e.g. © 2025 Your Organization / Author)
+3. Any required attribution or NOTICE file content
+
+Until then, all rights are reserved and no implicit license is granted.
