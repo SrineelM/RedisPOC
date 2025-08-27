@@ -1,5 +1,20 @@
-# Spring profiles can be used to segregate parts of your application configuration and make it only available in certain environments.
-# The active profile is set in build.gradle for local runs and can be overridden with environment variables in higher environments.
+# ===============================================================================
+# Main Spring Boot configuration file
+# -------------------------------------------------------------------------------
+# Purpose: Sets the default active profile for the application.
+# How to override:
+#   - Environment variable: SPRING_PROFILES_ACTIVE=dev|prod
+#   - Command line: -Dspring.profiles.active=dev|prod
+#   - In build.gradle or CI/CD pipeline
+#
+# Profiles:
+#   - dev: Local development (single-node Redis, H2 DB)
+#   - prod: Production (Redis cluster, PostgreSQL)
+# -------------------------------------------------------------------------------
+# Best Practice: Keep this file minimal. All environment-specific config goes in
+# application-dev.yml or application-prod.yml.
+# ===============================================================================
 spring:
   profiles:
-    active: dev # Default to dev profile
+    active: dev # Default to dev profile. Change to 'prod' for production.
+# ===============================================================================

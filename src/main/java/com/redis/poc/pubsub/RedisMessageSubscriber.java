@@ -1,31 +1,47 @@
 package com.redis.poc.pubsub;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
-
+/**
+ * A subscriber service that listens for messages on a specific Redis Pub/Sub channel.
+ *
+ * This class implements the {@link MessageListener} interface from Spring Data Redis.
+ * It is registered to a specific topic and will be invoked whenever a message is published to that topic.
+ * For simplicity, it stores received messages in an in-memory list.
+ */
 @Service
 @Slf4j
 public class RedisMessageSubscriber implements MessageListener {
 
-    private final List<String> messageList = new ArrayList<>();
+    // A thread-safe list to store messages received from the Redis channel.
+    private final List<String> messageList = Collections.synchronizedList(new ArrayList<>());
 
     /**
-     * This method is called when a message is received from the Redis channel.
-     * It logs the received message and adds it to a list for later retrieval.
+     * This callback method is executed whenever a message is received from the subscribed Redis channel.
+     *
+     * @param message The raw Redis message, which includes the message body.
+     * @param pattern The pattern that matched the channel (if any).
      */
     @Override
     public void onMessage(Message message, byte[] pattern) {
         String receivedMessage = new String(message.getBody());
-        log.info("Received message: {}", receivedMessage);
+        log.info("Received message from topic: '{}'", receivedMessage);
         messageList.add(receivedMessage);
     }
 
+    /**
+     * Retrieves a copy of the list of messages received so far.
+     *
+     * @return A list of received messages.
+     */
     public List<String> getMessageList() {
-        return messageList;
+        // Return a copy to prevent external modification of the internal list.
+        return new ArrayList<>(messageList);
     }
 }

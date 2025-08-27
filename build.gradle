@@ -89,7 +89,6 @@ bootRun {
 spotless {
     java {
         palantirJavaFormat()
-        prettier().config(['tabWidth': 4])
         importOrder()
         // Do not block build on formatting errors
         enforceCheck false

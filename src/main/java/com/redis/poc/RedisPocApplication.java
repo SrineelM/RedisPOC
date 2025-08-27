@@ -15,5 +15,4 @@ public class RedisPocApplication {
     public static void main(String[] args) {
         SpringApplication.run(RedisPocApplication.class, args);
     }
-
 }

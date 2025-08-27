@@ -1,11 +1,10 @@
 package com.redis.poc.audit;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j
@@ -25,7 +24,7 @@ public class AuditLogger {
         auditEvent.put("key", key);
         auditEvent.put("success", success);
         auditEvent.put("thread", Thread.currentThread().getName());
-        
+
         if (additionalInfo != null) {
             auditEvent.put("additionalInfo", additionalInfo);
         }

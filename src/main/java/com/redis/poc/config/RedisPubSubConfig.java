@@ -92,8 +92,7 @@ public class RedisPubSubConfig {
             MessageListenerAdapter messageListenerAdapter,
             ChannelTopic topic,
             KeyExpiredListener keyExpiredListener, // Inject the new listener
-            PatternTopic keyExpiredTopic
-    ) {
+            PatternTopic keyExpiredTopic) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
 

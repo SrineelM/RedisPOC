@@ -3,6 +3,7 @@ package com.redis.poc.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import java.time.Duration;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.cache.CacheManager;
@@ -16,8 +17,6 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
-
-import java.time.Duration;
 
 /**
  * Unified Redis configuration supporting both single Redis setup and read/write separation.
@@ -79,7 +78,8 @@ public class RedisConfig {
      */
     @Bean
     @Primary
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory, ObjectMapper redisObjectMapper) {
+    public RedisTemplate<String, Object> redisTemplate(
+            RedisConnectionFactory connectionFactory, ObjectMapper redisObjectMapper) {
         return createRedisTemplate(connectionFactory, redisObjectMapper);
     }
 
@@ -125,7 +125,8 @@ public class RedisConfig {
      * @param redisObjectMapper The ObjectMapper for serialization
      * @return A configured RedisTemplate
      */
-    private RedisTemplate<String, Object> createRedisTemplate(RedisConnectionFactory connectionFactory, ObjectMapper redisObjectMapper) {
+    private RedisTemplate<String, Object> createRedisTemplate(
+            RedisConnectionFactory connectionFactory, ObjectMapper redisObjectMapper) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
         template.setKeySerializer(new StringRedisSerializer());
@@ -153,20 +154,22 @@ public class RedisConfig {
      */
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory, ObjectMapper redisObjectMapper) {
-    RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
-        .entryTtl(Duration.ofMinutes(10))
-        .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
-        .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer(redisObjectMapper)))
-        .disableCachingNullValues();
+        RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
+                .entryTtl(Duration.ofMinutes(10))
+                .serializeKeysWith(
+                        RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(
+                        new GenericJackson2JsonRedisSerializer(redisObjectMapper)))
+                .disableCachingNullValues();
 
-    // Per-cache TTL overrides
-    RedisCacheConfiguration shortLived = defaultConfig.entryTtl(Duration.ofSeconds(30));
-    RedisCacheConfiguration longLived = defaultConfig.entryTtl(Duration.ofHours(1));
+        // Per-cache TTL overrides
+        RedisCacheConfiguration shortLived = defaultConfig.entryTtl(Duration.ofSeconds(30));
+        RedisCacheConfiguration longLived = defaultConfig.entryTtl(Duration.ofHours(1));
 
-    return RedisCacheManager.builder(connectionFactory)
-        .cacheDefaults(defaultConfig)
-        .withCacheConfiguration("products:recent", shortLived)
-        .withCacheConfiguration("products:details", longLived)
-        .build();
+        return RedisCacheManager.builder(connectionFactory)
+                .cacheDefaults(defaultConfig)
+                .withCacheConfiguration("products:recent", shortLived)
+                .withCacheConfiguration("products:details", longLived)
+                .build();
     }
 }

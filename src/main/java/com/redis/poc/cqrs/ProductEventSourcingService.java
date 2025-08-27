@@ -4,18 +4,22 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.redis.poc.cqrs.event.ProductEvent;
 import com.redis.poc.cqrs.event.ProductEventStore;
 import com.redis.poc.domain.Product;
-import org.springframework.stereotype.Service;
-import jakarta.annotation.PostConstruct;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.beans.factory.annotation.Value;
+import jakarta.annotation.PostConstruct;
 import java.time.Instant;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
 
+/**
+ * Service responsible for event sourcing of product data.
+ * It records product events (creations, updates, deletions) and can reconstruct the product state from these events.
+ * It also handles snapshotting for performance optimization and idempotency to prevent duplicate event processing.
+ */
 @Service
 public class ProductEventSourcingService {
     private final ProductEventStore eventStore;
@@ -25,25 +29,45 @@ public class ProductEventSourcingService {
     private volatile Instant lastSnapshotTime = Instant.EPOCH;
     private final Timer snapshotTimer;
     private final StringRedisTemplate stringRedisTemplate;
+
     @Value("${product.events.idempotency-ttl-seconds:86400}")
     private long idempotencyTtlSeconds;
+
     private static final String IDEMPOTENCY_SET_KEY = "product:events:processed";
 
-    public ProductEventSourcingService(ProductEventStore eventStore, ObjectMapper objectMapper, MeterRegistry meterRegistry, StringRedisTemplate stringRedisTemplate) {
+    public ProductEventSourcingService(
+            ProductEventStore eventStore,
+            ObjectMapper objectMapper,
+            MeterRegistry meterRegistry,
+            StringRedisTemplate stringRedisTemplate) {
         this.eventStore = eventStore;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
-        this.snapshotTimer = Timer.builder("product.snapshot.duration").publishPercentileHistogram().register(meterRegistry);
+        this.snapshotTimer = Timer.builder("product.snapshot.duration")
+                .publishPercentileHistogram()
+                .register(meterRegistry);
         this.stringRedisTemplate = stringRedisTemplate;
     }
 
+    /**
+     * Registers gauges for monitoring snapshot metrics.
+     */
     @PostConstruct
     void registerGauges() {
         meterRegistry.gauge("product.snapshot.count", snapshotCount);
-        meterRegistry.gauge("product.snapshot.age.seconds", this, s ->
-                lastSnapshotTime == null ? -1.0 : (double) java.time.Duration.between(lastSnapshotTime, Instant.now()).getSeconds());
+        meterRegistry.gauge(
+                "product.snapshot.age.seconds",
+                this,
+                s -> lastSnapshotTime == null
+                        ? -1.0
+                        : (double) java.time.Duration.between(lastSnapshotTime, Instant.now())
+                                .getSeconds());
     }
 
+    /**
+     * Records a product creation event.
+     * @param product The product that was created.
+     */
     public void recordCreate(Product product) {
         try {
             String payload = objectMapper.writeValueAsString(product);
@@ -55,6 +79,10 @@ public class ProductEventSourcingService {
         }
     }
 
+    /**
+     * Records a product update event.
+     * @param product The product that was updated.
+     */
     public void recordUpdate(Product product) {
         try {
             String payload = objectMapper.writeValueAsString(product);
@@ -66,12 +94,20 @@ public class ProductEventSourcingService {
         }
     }
 
+    /**
+     * Records a product deletion event.
+     * @param productId The ID of the product that was deleted.
+     */
     public void recordDelete(String productId) {
-    ProductEvent event = new ProductEvent(ProductEvent.Type.DELETED, productId, null);
-    appendWithIdempotency(event);
-    maybeSnapshot();
+        ProductEvent event = new ProductEvent(ProductEvent.Type.DELETED, productId, null);
+        appendWithIdempotency(event);
+        maybeSnapshot();
     }
 
+    /**
+     * Reconstructs the list of products from snapshots and events.
+     * @return A list of all current products.
+     */
     public List<Product> reconstructProducts() {
         // For local: load all snapshots, then replay events after snapshot
         // This is a simplified example. In production, use distributed snapshot storage and advanced replay logic.
@@ -89,8 +125,9 @@ public class ProductEventSourcingService {
         for (Object e : events) {
             if (e instanceof ProductEvent) {
                 ProductEvent ev = (ProductEvent) e;
-                String uniqueKey = ev.getType()+":"+ev.getProductId()+":"+ev.getTimestamp();
-                if (Boolean.TRUE.equals(stringRedisTemplate.opsForSet().isMember(IDEMPOTENCY_SET_KEY, uniqueKey)) || !localProcessed.add(uniqueKey)) {
+                String uniqueKey = ev.getType() + ":" + ev.getProductId() + ":" + ev.getTimestamp();
+                if (Boolean.TRUE.equals(stringRedisTemplate.opsForSet().isMember(IDEMPOTENCY_SET_KEY, uniqueKey))
+                        || !localProcessed.add(uniqueKey)) {
                     continue; // already applied
                 }
                 if (ev.getType() != ProductEvent.Type.DELETED) {
@@ -111,6 +148,10 @@ public class ProductEventSourcingService {
 
     // Snapshot every N events (simple threshold). For prod: maintain versioned snapshots per aggregate
     private static final int SNAPSHOT_THRESHOLD = 50;
+
+    /**
+     * Creates a snapshot of the current product state if the number of events reaches a certain threshold.
+     */
     private void maybeSnapshot() {
         int total = eventStore.getAllEvents().size();
         if (total % SNAPSHOT_THRESHOLD == 0) {
@@ -126,8 +167,12 @@ public class ProductEventSourcingService {
         }
     }
 
+    /**
+     * Appends an event to the event store with an idempotency check.
+     * @param event The event to append.
+     */
     private void appendWithIdempotency(ProductEvent event) {
-        String uniqueKey = event.getType()+":"+event.getProductId()+":"+event.getTimestamp();
+        String uniqueKey = event.getType() + ":" + event.getProductId() + ":" + event.getTimestamp();
         Boolean exists = stringRedisTemplate.opsForSet().isMember(IDEMPOTENCY_SET_KEY, uniqueKey);
         if (Boolean.TRUE.equals(exists)) return;
         eventStore.appendEvent(event);

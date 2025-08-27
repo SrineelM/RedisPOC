@@ -4,7 +4,12 @@ import java.io.Serializable;
 import java.time.Instant;
 
 public class ProductEvent implements Serializable {
-    public enum Type { CREATED, UPDATED, DELETED }
+    public enum Type {
+        CREATED,
+        UPDATED,
+        DELETED
+    }
+
     private final Type type;
     private final String productId;
     private final String payload;
@@ -24,9 +29,23 @@ public class ProductEvent implements Serializable {
         this.version = version;
     }
 
-    public Type getType() { return type; }
-    public String getProductId() { return productId; }
-    public String getPayload() { return payload; }
-    public Instant getTimestamp() { return timestamp; }
-    public int getVersion() { return version; }
+    public Type getType() {
+        return type;
+    }
+
+    public String getProductId() {
+        return productId;
+    }
+
+    public String getPayload() {
+        return payload;
+    }
+
+    public Instant getTimestamp() {
+        return timestamp;
+    }
+
+    public int getVersion() {
+        return version;
+    }
 }

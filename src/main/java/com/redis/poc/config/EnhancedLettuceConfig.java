@@ -4,34 +4,31 @@ import io.lettuce.core.ClientOptions;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.SocketOptions;
 import io.lettuce.core.TimeoutOptions;
-import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.protocol.ProtocolVersion;
 import io.lettuce.core.resource.ClientResources;
 import io.lettuce.core.resource.DefaultClientResources;
+import java.time.Duration;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
-import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
-
-import java.time.Duration;
 
 /**
- * Unified Redis/Lettuce configuration combining connection pooling, 
- * client options, and production-ready settings.
- * 
- * This configuration provides:
- * - Production-ready Redis client with resilience patterns
- * - Connection pooling with optimal settings
- * - Stateful Redis connection for dedicated operations
- * - Enhanced socket and timeout configurations
+ * Provides a highly customized, production-grade configuration for the Lettuce Redis client.
+ * This class overrides the default Spring Boot auto-configuration to enable advanced features
+ * like connection pooling, fine-grained timeout settings, and resilience patterns.
+ * This configuration is only active when the "local" Spring profile is enabled.
  */
 @Configuration
+@Profile("local")
 public class EnhancedLettuceConfig {
 
+    // Injects Redis connection details from application.properties or environment variables.
     @Value("${spring.redis.host:localhost}")
     private String redisHost;
 
@@ -48,42 +45,46 @@ public class EnhancedLettuceConfig {
     private Duration connectTimeout;
 
     /**
-     * Enhanced ClientResources with observability and thread pool tuning
+     * Configures the underlying resources for the Lettuce client, such as thread pools.
+     * Tuning these thread pools can be important for optimizing performance under high load.
+     * @return A shared ClientResources instance.
      */
     @Bean(destroyMethod = "shutdown")
     public ClientResources clientResources() {
         return DefaultClientResources.builder()
-                .ioThreadPoolSize(4)  // Tune based on load
-                .computationThreadPoolSize(4)  // Tune based on load
+                .ioThreadPoolSize(4) // Default is Netty's default (2 * available processors)
+                .computationThreadPoolSize(4) // Default is Netty's default
                 .build();
     }
 
     /**
-     * Production-ready Redis client with comprehensive resilience patterns
+     * Creates a fully configured, low-level Lettuce RedisClient instance.
+     * This bean defines the core behavior of the Redis client, including socket options,
+     * timeouts, and reconnection strategies.
+     * @param clientResources The shared resources (thread pools) for the client.
+     * @return A configured RedisClient.
      */
     @Bean(destroyMethod = "shutdown")
     public RedisClient redisClient(ClientResources clientResources) {
-        // Enhanced socket options with keepalive and TCP settings
+        // Configures low-level TCP socket settings.
         SocketOptions socketOptions = SocketOptions.builder()
                 .connectTimeout(connectTimeout)
-                .keepAlive(true)
-                .tcpNoDelay(true)
+                .keepAlive(true) // Enable TCP keep-alive
+                .tcpNoDelay(true) // Disable Nagle's algorithm for lower latency
                 .build();
 
-        // Comprehensive timeout configuration
-        TimeoutOptions timeoutOptions = TimeoutOptions.builder()
-                .fixedTimeout(timeout)
-                .build();
+        // Configures timeouts for Redis commands.
+        TimeoutOptions timeoutOptions =
+                TimeoutOptions.builder().fixedTimeout(timeout).build();
 
-        // Production-ready client options
+        // Main client options configuration.
         ClientOptions clientOptions = ClientOptions.builder()
                 .socketOptions(socketOptions)
                 .timeoutOptions(timeoutOptions)
-                .autoReconnect(true)
-                .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
-                .protocolVersion(ProtocolVersion.RESP3)  // Use latest protocol
-                .requestQueueSize(1000)  // Configure request queue size
-                .publishOnScheduler(true)  // Better performance for pub/sub
+                .autoReconnect(true) // Enable auto-reconnect for resilience
+                .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS) // Fail fast when disconnected
+                .protocolVersion(ProtocolVersion.RESP3) // Use the latest Redis protocol
+                .publishOnScheduler(true) // Improves performance for Pub/Sub operations
                 .build();
 
         String redisUri = buildRedisUri();
@@ -93,49 +94,44 @@ public class EnhancedLettuceConfig {
     }
 
     /**
-     * Enhanced connection factory with connection pooling
+     * Creates the main RedisConnectionFactory bean that Spring Data Redis will use.
+     * This factory is configured to use a connection pool for high performance.
+     * @param clientResources The shared resources for the client.
+     * @return A pooled LettuceConnectionFactory.
      */
     @Bean
     public RedisConnectionFactory redisConnectionFactory(ClientResources clientResources) {
         RedisStandaloneConfiguration redisConfig = new RedisStandaloneConfiguration(redisHost, redisPort);
-        
-        // Connection pool configuration
+
+        // Configuration for the connection pool using Apache Commons Pool2.
         GenericObjectPoolConfig<?> poolConfig = new GenericObjectPoolConfig<>();
-        poolConfig.setMaxTotal(20);
-        poolConfig.setMaxIdle(10);
-        poolConfig.setMinIdle(2);
-        poolConfig.setTestOnBorrow(true);
-        poolConfig.setTestOnReturn(true);
-        poolConfig.setTestWhileIdle(true);
-        poolConfig.setBlockWhenExhausted(true);
-        poolConfig.setMaxWait(timeout);
-        
+        poolConfig.setMaxTotal(20); // Max number of connections in the pool
+        poolConfig.setMaxIdle(10); // Max number of idle connections
+        poolConfig.setMinIdle(2); // Min number of idle connections to maintain
+        poolConfig.setTestOnBorrow(true); // Validate connections before they are borrowed from the pool
+        poolConfig.setBlockWhenExhausted(true); // Block when the pool is exhausted, rather than failing
+        poolConfig.setMaxWait(timeout); // How long to wait for a connection when the pool is exhausted
+
+        // Creates the pooling configuration for the Lettuce client.
         LettucePoolingClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
-            .clientResources(clientResources)
-            .commandTimeout(timeout)
-            .poolConfig(poolConfig)
-            .build();
-        
+                .clientResources(clientResources)
+                .commandTimeout(timeout)
+                .poolConfig(poolConfig)
+                .build();
+
         LettuceConnectionFactory factory = new LettuceConnectionFactory(redisConfig, clientConfig);
-        factory.setValidateConnection(true);
-        factory.setShareNativeConnection(false);  // Better for high concurrency
-        
+        // It's often recommended to not share the native connection for high-concurrency applications
+        // to ensure each thread gets its own connection from the pool.
+        factory.setShareNativeConnection(false);
+
         return factory;
     }
 
     /**
-     * Provides a stateful, thread-safe connection to Redis that will be shared across the application.
-     * A stateful connection is recommended when you need a dedicated connection that is not managed by a connection pool.
+     * Helper method to construct the Redis connection URI from configuration properties.
+     * @return A redis URI string (e.g., "redis://localhost:6379").
      */
-    @Bean(destroyMethod = "close")
-    public StatefulRedisConnection<String, String> redisConnection(RedisClient redisClient) {
-        return redisClient.connect();
-    }
-
     private String buildRedisUri() {
-        StringBuilder uri = new StringBuilder();
-        uri.append(sslEnabled ? "rediss://" : "redis://");
-        uri.append(redisHost).append(":").append(redisPort);
-        return uri.toString();
+        return (sslEnabled ? "rediss://" : "redis://") + redisHost + ":" + redisPort;
     }
 }

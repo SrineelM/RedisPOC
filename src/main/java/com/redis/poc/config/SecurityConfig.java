@@ -1,20 +1,20 @@
 package com.redis.poc.config;
 
 import com.redis.poc.security.JwtAuthenticationFilter;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.context.annotation.Bean;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
  * Configures the application's web security settings using Spring Security.
@@ -48,26 +48,28 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable()) // Disable CSRF protection, as it's not needed for stateless APIs
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            // Configure session management to be stateless, as we are using JWTs
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(authz -> authz
-                // Permit all requests to public endpoints, actuator, and API documentation
-                .requestMatchers("/api/public/**", "/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()
-                // All other requests must be authenticated
-                .anyRequest().authenticated()
-            )
-            .headers(headers -> headers
-                // Sets a strict Content Security Policy
-                .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'"))
-                // Prevents clickjacking by disallowing the page to be rendered in a frame
-                .frameOptions(frame -> frame.sameOrigin())
-                // Enforces HTTPS by telling browsers to only access the site via HTTPS for the next year
-                .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))
-            )
-            // Add the custom JWT filter before the standard username/password authentication filter
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                // Configure session management to be stateless, as we are using JWTs
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authz -> authz
+                        // Permit all requests to public endpoints, actuator, and API documentation
+                        .requestMatchers("/api/public/**", "/actuator/**", "/swagger-ui/**", "/v3/api-docs/**")
+                        .permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/register")
+                        .permitAll()
+                        // All other requests must be authenticated
+                        .anyRequest()
+                        .authenticated())
+                .headers(headers -> headers
+                        // Sets a strict Content Security Policy
+                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'"))
+                        // Prevents clickjacking by disallowing the page to be rendered in a frame
+                        .frameOptions(frame -> frame.sameOrigin())
+                        // Enforces HTTPS by telling browsers to only access the site via HTTPS for the next year
+                        .httpStrictTransportSecurity(
+                                hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000)))
+                // Add the custom JWT filter before the standard username/password authentication filter
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

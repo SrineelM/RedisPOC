@@ -1,75 +1,100 @@
-# Configuration for the 'prod' profile, intended for production environments.
+# ===============================================================================
+# application-prod.yml
+# -------------------------------------------------------------------------------
+# Profile: prod (production)
+# Usage: Activated when spring.profiles.active=prod or SPRING_PROFILES_ACTIVE=prod
+# Purpose: Production deployment with Redis cluster and PostgreSQL DB.
+# -------------------------------------------------------------------------------
+# Best Practice: Use environment variables for secrets and connection info. Never hardcode secrets.
+# ===============================================================================
 spring:
-  # PostgreSQL Database Configuration for production
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database Configuration (production)
+  # ---------------------------------------------------------------------------
   datasource:
-    # Use environment variables for connection details to avoid hardcoding credentials.
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:appdb}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:appdb} # Use env vars for DB connection.
     username: ${DB_USER:appuser}
     password: ${DB_PASSWORD:secret}
     driver-class-name: org.postgresql.Driver
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: validate # Validates the schema, fails on mismatch. Safer for production.
+      ddl-auto: validate # Validate schema only. Never auto-update in prod.
 
-  # Redis Configuration for production
+  # ---------------------------------------------------------------------------
+  # Redis Configuration (cluster, production)
+  # ---------------------------------------------------------------------------
   redis:
-    host: ${REDIS_HOST:localhost}
+    host: ${REDIS_HOST:localhost} # Use env vars for Redis host.
     port: ${REDIS_PORT:6379}
-    password: ${REDIS_PASSWORD:secret} # Always use a password in production
+    password: ${REDIS_PASSWORD:secret} # Always set a password in production.
     ssl:
-      enabled: true # Enable SSL for secure communication with Redis in production
+      enabled: true # Enable SSL for secure Redis communication.
     timeout: 3s
     connect-timeout: 5s
     lettuce:
       pool:
-        max-active: 20
+        max-active: 20 # Connection pool settings for high concurrency.
         max-idle: 10
         min-idle: 2
         max-wait: 3s
     stream:
-      product-events: product:events:stream
+      product-events: product:events:stream # Stream key for product events.
       orders:
-        max-length: 5000
-        idempotency-ttl-seconds: 3600
+        max-length: 5000 # Higher max length for production scale.
+        idempotency-ttl-seconds: 3600 # TTL for idempotency keys.
 
+# -------------------------------------------------------------------------------
+# EventStoreDB Configuration (production)
+# -------------------------------------------------------------------------------
 eventstoredb:
-  uri: ${EVENTSTOREDB_URI:esdb://localhost:2113?tls=true}
+  uri: ${EVENTSTOREDB_URI:esdb://localhost:2113?tls=true} # Use env vars for URI.
   username: ${EVENTSTOREDB_USER:admin}
   password: ${EVENTSTOREDB_PASSWORD:changeit}
 
-  # Cache Configuration for production
+  # ---------------------------------------------------------------------------
+  # Cache Configuration (production)
+  # ---------------------------------------------------------------------------
   cache:
-    type: redis
+    type: redis # Use Redis for distributed caching.
     cache-names:
       - products
       - product-details
 
-# Rate Limiting Configuration for production
+# -------------------------------------------------------------------------------
+# Rate Limiting Configuration (production)
+# -------------------------------------------------------------------------------
+# Used by RateLimitInterceptor. Prevents abuse in production.
 ratelimit:
-  capacity: 100
-  rate: 50
-  refill-period: 1m
-  paths: /api/**
-  excluded-paths: /actuator/**,/api/public/**
+  capacity: 100 # Higher capacity for production traffic.
+  rate: 50 # Tokens added per refill period.
+  refill-period: 1m # Refill period in minutes.
+  paths: /api/** # Apply rate limiting to all API endpoints.
+  excluded-paths: /actuator/**,/api/public/** # Exclude health and public endpoints.
 
-# JWT Configuration for production
+# -------------------------------------------------------------------------------
+# JWT Configuration (production)
+# -------------------------------------------------------------------------------
+# Use environment variable for secret. NEVER hardcode in production.
 jwt:
   secret: ${JWT_SECRET:myVerySecretKeyThatShouldBeAtLeast256BitsLongForHS256Algorithm}
-  expiration: ${JWT_EXPIRATION:3600}
-  revocation-namespace: prod
+  expiration: ${JWT_EXPIRATION:3600} # Token expiration in seconds.
+  revocation-namespace: prod # Namespace for production token revocation.
 
 product:
   events:
-    idempotency-ttl-seconds: 172800
+    idempotency-ttl-seconds: 172800 # Longer TTL for production event idempotency.
 
 security:
   auth:
     login:
-      fail-threshold: 10
-      lockout-seconds: 900
+      fail-threshold: 10 # Higher threshold for production.
+      lockout-seconds: 900 # Longer lockout duration.
 
-# Resilience4j Configuration for production
+# -------------------------------------------------------------------------------
+# Resilience4j Configuration (production)
+# -------------------------------------------------------------------------------
+# Circuit breaker, bulkhead, time limiter, and retry for Redis operations.
 resilience4j:
   circuitbreaker:
     instances:
@@ -105,29 +130,36 @@ resilience4j:
           - io.lettuce.core.RedisCommandTimeoutException
           - java.util.concurrent.TimeoutException
 
-# Management and Monitoring for production
+# -------------------------------------------------------------------------------
+# Management and Monitoring (production)
+# -------------------------------------------------------------------------------
+# Exposes health, metrics, and tracing endpoints for production monitoring.
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus # Expose these endpoints.
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: when-authorized # Restrict health details in prod.
   metrics:
     export:
       prometheus:
-        enabled: true
+        enabled: true # Enable Prometheus metrics for production.
   tracing:
     sampling:
-      probability: 0.1  # Sample 10% in production
+      probability: 0.1 # Sample 10% of traces in production.
 
-# Logging configuration
+# -------------------------------------------------------------------------------
+# Logging configuration (production)
+# -------------------------------------------------------------------------------
 logging:
   level:
-    com.redis.poc: INFO
-    io.lettuce: WARN
-    org.springframework.security: WARN
+    com.redis.poc: INFO # Set log level for application package.
+    io.lettuce: WARN # Reduce noise from Redis client.
+    org.springframework.security: WARN # Reduce noise from Spring Security.
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+
+# ===============================================================================

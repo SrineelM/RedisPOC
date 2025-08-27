@@ -1,51 +1,72 @@
-# Configuration for the 'dev' profile, intended for local development.
+# ===============================================================================
+# application-dev.yml
+# -------------------------------------------------------------------------------
+# Profile: dev (local development)
+# Usage: Activated when spring.profiles.active=dev or SPRING_PROFILES_ACTIVE=dev
+# Purpose: Local development with single-node Redis and H2 DB. No external dependencies.
+# -------------------------------------------------------------------------------
+# Best Practice: Use hardcoded secrets ONLY for local/dev. Never commit real secrets.
+# ===============================================================================
 spring:
-  # H2 Database Configuration for local development
+  # ---------------------------------------------------------------------------
+  # H2 Database Configuration (local, in-memory)
+  # ---------------------------------------------------------------------------
   datasource:
-    url: jdbc:h2:mem:testdb # In-memory database, data is lost on application restart
+    url: jdbc:h2:mem:testdb # In-memory DB. Data lost on restart. Fast for local dev.
     driver-class-name: org.h2.Driver
     username: sa
-    password: ''
+    password: '' # No password for local H2. Safe for dev only.
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: update # Automatically updates the database schema based on entities
-    show-sql: true # Logs SQL statements to the console for debugging
+      ddl-auto: update # Auto-migrate schema. Use 'validate' in prod.
+    show-sql: true # Show SQL in logs for debugging.
 
-  # Redis Configuration for local development
+  # ---------------------------------------------------------------------------
+  # Redis Configuration (single-node, local)
+  # ---------------------------------------------------------------------------
   redis:
-    host: localhost
+    host: localhost # Local Redis instance. Change if using Docker or remote Redis.
     port: 6379
-    # No password for local Redis by default. If you have one, add it here.
-    # password: your-local-redis-password
+    # password: your-local-redis-password # Uncomment if your local Redis has a password.
     stream:
-      product-events: product:events:stream
+      product-events: product:events:stream # Stream key for product events.
       orders:
-        max-length: 1000
-        idempotency-ttl-seconds: 3600
+        max-length: 1000 # Max stream length for orders. Prevents memory bloat.
+        idempotency-ttl-seconds: 3600 # TTL for idempotency keys in seconds.
 
+# -------------------------------------------------------------------------------
+# EventStoreDB Configuration (local)
+# -------------------------------------------------------------------------------
 eventstoredb:
-  uri: esdb://localhost:2113?tls=false
+  uri: esdb://localhost:2113?tls=false # Local EventStoreDB. No TLS for dev.
   username: admin
-  password: changeit
+  password: changeit # Default password for local EventStoreDB. Change for prod.
 
-  # Cache Configuration
+  # ---------------------------------------------------------------------------
+  # Cache Configuration (local)
+  # ---------------------------------------------------------------------------
   cache:
-    type: redis # Use Redis for caching
-    cache-names: # Pre-define cache names for better organization
+    type: redis # Use Redis for caching. Fast for local dev.
+    cache-names: # Pre-define cache names for organization.
       - products
       - product-details
 
-# Rate Limiting Configuration
-# These values are used by the RateLimitInterceptor
+# -------------------------------------------------------------------------------
+# Rate Limiting Configuration (local)
+# -------------------------------------------------------------------------------
+# Used by RateLimitInterceptor. Prevents abuse during local testing.
 ratelimit:
-  capacity: 10 # Max number of requests
-  rate: 5 # How many tokens are added per refill period
-  refill-period: 1s # The time it takes to add 'rate' tokens
-  paths: /api/ratelimit/** # Paths to apply rate limiting to
-  excluded-paths: /api/public/** # Paths to exclude from rate limiting
+  capacity: 10 # Max requests per window.
+  rate: 5 # Tokens added per refill period.
+  refill-period: 1s # Refill period in seconds.
+  paths: /api/ratelimit/** # Paths to apply rate limiting.
+  excluded-paths: /api/public/** # Paths excluded from rate limiting.
 
-# Resilience4j Configuration
+# -------------------------------------------------------------------------------
+# Resilience4j Configuration (local)
+# -------------------------------------------------------------------------------
+# Circuit breaker, bulkhead, time limiter, and retry for Redis operations.
 resilience4j:
   circuitbreaker:
     instances:
@@ -81,35 +102,43 @@ resilience4j:
           - io.lettuce.core.RedisCommandTimeoutException
           - java.util.concurrent.TimeoutException
 
-# JWT Configuration
+# -------------------------------------------------------------------------------
+# JWT Configuration (local)
+# -------------------------------------------------------------------------------
+# Hardcoded secret for local dev. NEVER use in production.
 jwt:
-  secret: myVerySecretKeyThatShouldBeAtLeast256BitsLongForHS256Algorithm
-  expiration: 3600
-  revocation-namespace: dev
+  secret: 8f3c2e1a-4b7d-4e2a-9c6f-2a1b3c4d5e6f7g8h9i0j1k2l3m4n5o6p # Safe for local only.
+  expiration: 3600 # Token expiration in seconds.
+  revocation-namespace: dev # Namespace for local token revocation.
 
 product:
   events:
-    idempotency-ttl-seconds: 86400
+    idempotency-ttl-seconds: 86400 # TTL for product event idempotency keys.
 
 security:
   auth:
     login:
-      fail-threshold: 5
-      lockout-seconds: 300
+      fail-threshold: 5 # Max failed logins before lockout.
+      lockout-seconds: 300 # Lockout duration in seconds.
 
-# Management and Monitoring
+# -------------------------------------------------------------------------------
+# Management and Monitoring (local)
+# -------------------------------------------------------------------------------
+# Exposes health, metrics, and tracing endpoints for local monitoring.
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus # Expose these endpoints.
   endpoint:
     health:
-      show-details: always
+      show-details: always # Show health details for debugging.
   metrics:
     export:
       prometheus:
-        enabled: true
+        enabled: true # Enable Prometheus metrics for local.
   tracing:
     sampling:
-      probability: 1.0
+      probability: 1.0 # Sample all traces in local/dev.
+
+# ===============================================================================

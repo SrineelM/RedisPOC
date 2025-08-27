@@ -1,10 +1,9 @@
 package com.redis.poc.controller;
 
 import com.redis.poc.service.GeospatialService;
+import java.util.Set;
 import org.springframework.data.geo.Metrics;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Set;
 
 @RestController
 @RequestMapping("/api/geo")
@@ -25,9 +24,7 @@ public class GeospatialController {
      */
     @PostMapping("/location")
     public String addLocation(
-            @RequestParam String name,
-            @RequestParam double longitude,
-            @RequestParam double latitude) {
+            @RequestParam String name, @RequestParam double longitude, @RequestParam double latitude) {
         geospatialService.addLocation(name, longitude, latitude);
         return "Location '" + name + "' added.";
     }
@@ -41,9 +38,7 @@ public class GeospatialController {
      */
     @GetMapping("/nearby")
     public Set<String> findNearby(
-            @RequestParam double longitude,
-            @RequestParam double latitude,
-            @RequestParam double radius) {
+            @RequestParam double longitude, @RequestParam double latitude, @RequestParam double radius) {
         // Using KILOMETERS as the default metric for this example
         return geospatialService.findNearby(longitude, latitude, radius, Metrics.KILOMETERS);
     }
