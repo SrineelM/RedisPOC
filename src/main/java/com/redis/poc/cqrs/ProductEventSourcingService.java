@@ -16,6 +16,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Service responsible for event sourcing of product data.
+ * It records product events (creations, updates, deletions) and can reconstruct the product state from these events.
+ * It also handles snapshotting for performance optimization and idempotency to prevent duplicate event processing.
+ */
 @Service
 public class ProductEventSourcingService {
     private final ProductEventStore eventStore;
@@ -37,6 +42,9 @@ public class ProductEventSourcingService {
         this.stringRedisTemplate = stringRedisTemplate;
     }
 
+    /**
+     * Registers gauges for monitoring snapshot metrics.
+     */
     @PostConstruct
     void registerGauges() {
         meterRegistry.gauge("product.snapshot.count", snapshotCount);
@@ -44,6 +52,10 @@ public class ProductEventSourcingService {
                 lastSnapshotTime == null ? -1.0 : (double) java.time.Duration.between(lastSnapshotTime, Instant.now()).getSeconds());
     }
 
+    /**
+     * Records a product creation event.
+     * @param product The product that was created.
+     */
     public void recordCreate(Product product) {
         try {
             String payload = objectMapper.writeValueAsString(product);
@@ -55,6 +67,10 @@ public class ProductEventSourcingService {
         }
     }
 
+    /**
+     * Records a product update event.
+     * @param product The product that was updated.
+     */
     public void recordUpdate(Product product) {
         try {
             String payload = objectMapper.writeValueAsString(product);
@@ -66,12 +82,20 @@ public class ProductEventSourcingService {
         }
     }
 
+    /**
+     * Records a product deletion event.
+     * @param productId The ID of the product that was deleted.
+     */
     public void recordDelete(String productId) {
     ProductEvent event = new ProductEvent(ProductEvent.Type.DELETED, productId, null);
     appendWithIdempotency(event);
     maybeSnapshot();
     }
 
+    /**
+     * Reconstructs the list of products from snapshots and events.
+     * @return A list of all current products.
+     */
     public List<Product> reconstructProducts() {
         // For local: load all snapshots, then replay events after snapshot
         // This is a simplified example. In production, use distributed snapshot storage and advanced replay logic.
@@ -111,6 +135,10 @@ public class ProductEventSourcingService {
 
     // Snapshot every N events (simple threshold). For prod: maintain versioned snapshots per aggregate
     private static final int SNAPSHOT_THRESHOLD = 50;
+
+    /**
+     * Creates a snapshot of the current product state if the number of events reaches a certain threshold.
+     */
     private void maybeSnapshot() {
         int total = eventStore.getAllEvents().size();
         if (total % SNAPSHOT_THRESHOLD == 0) {
@@ -126,6 +154,10 @@ public class ProductEventSourcingService {
         }
     }
 
+    /**
+     * Appends an event to the event store with an idempotency check.
+     * @param event The event to append.
+     */
     private void appendWithIdempotency(ProductEvent event) {
         String uniqueKey = event.getType()+":"+event.getProductId()+":"+event.getTimestamp();
         Boolean exists = stringRedisTemplate.opsForSet().isMember(IDEMPOTENCY_SET_KEY, uniqueKey);
