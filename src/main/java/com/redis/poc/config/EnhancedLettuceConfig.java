@@ -4,7 +4,6 @@ import io.lettuce.core.ClientOptions;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.SocketOptions;
 import io.lettuce.core.TimeoutOptions;
-import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.protocol.ProtocolVersion;
 import io.lettuce.core.resource.ClientResources;
 import io.lettuce.core.resource.DefaultClientResources;
@@ -12,6 +11,7 @@ import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
@@ -30,6 +30,7 @@ import java.time.Duration;
  * - Enhanced socket and timeout configurations
  */
 @Configuration
+@Profile("local")
 public class EnhancedLettuceConfig {
 
     @Value("${spring.redis.host:localhost}")
@@ -121,15 +122,6 @@ public class EnhancedLettuceConfig {
         factory.setShareNativeConnection(false);  // Better for high concurrency
         
         return factory;
-    }
-
-    /**
-     * Provides a stateful, thread-safe connection to Redis that will be shared across the application.
-     * A stateful connection is recommended when you need a dedicated connection that is not managed by a connection pool.
-     */
-    @Bean(destroyMethod = "close")
-    public StatefulRedisConnection<String, String> redisConnection(RedisClient redisClient) {
-        return redisClient.connect();
     }
 
     private String buildRedisUri() {

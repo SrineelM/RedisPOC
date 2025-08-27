@@ -6,6 +6,7 @@ import io.lettuce.core.resource.ClientResources;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.connection.RedisClusterConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 
@@ -20,6 +21,7 @@ import java.util.List;
  * node information from the application properties.
  */
 @Configuration
+@Profile("prod")
 public class RedisClusterConfig {
 
     /**
