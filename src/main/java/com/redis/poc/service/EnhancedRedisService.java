@@ -22,6 +22,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import io.lettuce.core.RedisFuture;
 
+/**
+ * An enhanced Redis service that provides resilient, observable, and performant
+ * access to a Redis server. This class integrates Resilience4j for fault tolerance,
+ * Micrometer for observability (metrics and tracing), and uses Lettuce's asynchronous
+ * capabilities for non-blocking operations.
+ */
 @Service
 @Slf4j
 public class EnhancedRedisService {
@@ -37,7 +43,15 @@ public class EnhancedRedisService {
     }
 
     /**
-     * Complete resilience pattern with retry, circuit breaker, bulkhead, and observability
+     * Retrieves a value from Redis, applying a full set of resilience patterns.
+     * This method is decorated with annotations for retries, circuit breaking,
+     * bulkheading, and time limiting to ensure robust operation under load and
+     * during Redis instability. It also includes observability through metrics and tracing.
+     * The operation is executed asynchronously on a dedicated thread pool.
+     *
+     * @param key The key for which to retrieve the value.
+     * @return A CompletableFuture containing the value, or null if not found.
+     *         The future will complete exceptionally in case of unrecoverable errors.
      */
     @Retry(name = BACKEND)
     @CircuitBreaker(name = BACKEND, fallbackMethod = "fallbackGetValue")
@@ -50,10 +64,11 @@ public class EnhancedRedisService {
             log.debug("Executing Redis GET for key: {}", key);
             
             try {
+                // Use synchronous commands here as the entire block is already async.
                 RedisCommands<String, String> commands = connection.sync();
                 String value = commands.get(key);
                 
-                // Add custom metrics
+                // Add custom metrics/logging for cache hits and misses.
                 if (value != null) {
                     log.info("Cache HIT for key: {}", key);
                 } else {
@@ -63,13 +78,21 @@ public class EnhancedRedisService {
                 return value;
             } catch (Exception e) {
                 log.error("Redis operation failed for key: {}", key, e);
+                // Wrap the exception for better error handling upstream.
                 throw new RedisOperationException("Failed to get value for key: " + key, e);
             }
     }, redisAsyncExecutor);
     }
 
     /**
-     * Batch operations with pipeline for better performance
+     * Retrieves multiple values from Redis in a single batch operation using pipelining.
+     * Pipelining significantly improves performance by sending multiple commands to Redis
+     * at once, reducing network latency. This method is also protected by retry and
+     * circuit breaker patterns.
+     *
+     * @param keys A list of keys to retrieve.
+     * @return A CompletableFuture containing a list of values corresponding to the keys.
+     *         If a key is not found, the corresponding value in the list will be null.
      */
     @Retry(name = BACKEND)
     @CircuitBreaker(name = BACKEND)
@@ -81,30 +104,41 @@ public class EnhancedRedisService {
                 return Collections.emptyList();
             }
 
+            // Use asynchronous commands for pipelining.
             RedisAsyncCommands<String, String> async = connection.async();
+            // Disable auto-flushing to manually control when commands are sent.
             async.setAutoFlushCommands(false); // Enable pipelining
 
+            // Create a list of futures, one for each GET command.
             List<RedisFuture<String>> futures = keys.stream()
                     .map(async::get)
                     .collect(Collectors.toList());
 
+            // Manually flush the commands, sending them all to Redis in one go.
             async.flushCommands(); // Execute all commands
 
+            // Wait for all futures to complete and collect the results.
             return futures.stream()
                     .map(future -> {
                         try {
+                            // Wait for each future to complete with a timeout.
                             return future.get(5, TimeUnit.SECONDS);
                         } catch (Exception e) {
                             log.error("Failed to get value in batch operation", e);
-                            return null;
-                        }
-                    })
+                            return null; // Return null for failed individual retrievals.
+                        }                    })
                     .collect(Collectors.toList());
     }, redisAsyncExecutor);
     }
 
     /**
-     * Set with proper error handling and validation
+     * Sets a key-value pair in Redis with validation and an optional Time-To-Live (TTL).
+     * This method includes input validation and is protected by resilience patterns.
+     *
+     * @param key   The key to set. Cannot be null or empty.
+     * @param value The value to set. Cannot be null.
+     * @param ttl   The optional time-to-live for the key. If null, the key will not expire.
+     * @return A CompletableFuture containing true if the set operation was successful, false otherwise.
      */
     @Retry(name = BACKEND)
     @CircuitBreaker(name = BACKEND)
@@ -116,7 +150,7 @@ public class EnhancedRedisService {
             Duration ttl) {
         
     return CompletableFuture.supplyAsync(() -> {
-            // Input validation
+            // --- Input Validation ---
             if (key == null || key.trim().isEmpty()) {
                 throw new IllegalArgumentException("Key cannot be null or empty");
             }
@@ -131,12 +165,14 @@ public class EnhancedRedisService {
                 RedisCommands<String, String> commands = connection.sync();
                 String result;
                 
+                // Use SETEX if a TTL is provided to set the value and expiration atomically.
                 if (ttl != null) {
                     result = commands.setex(key, ttl.getSeconds(), value);
                 } else {
                     result = commands.set(key, value);
                 }
                 
+                // Redis SET commands return "OK" on success.
                 boolean success = "OK".equals(result);
                 log.debug("Set operation for key '{}' completed with result: {}", key, success);
                 return success;
@@ -148,14 +184,26 @@ public class EnhancedRedisService {
     }, redisAsyncExecutor);
     }
 
-    // Fallback methods with proper logging and monitoring
+    /**
+     * A fallback method for the circuit breaker on getValueWithFullResilience.
+     * This method is invoked when the circuit is open. It logs a warning and
+     * returns a default value (null) to prevent cascading failures.
+     *
+     * @param key The original key passed to the method.
+     * @param ex The exception that caused the fallback.
+     * @return A completed CompletableFuture with a null value.
+     */
     private CompletableFuture<String> fallbackGetValue(String key, Exception ex) {
         log.warn("Fallback activated for key '{}' due to: {}", key, ex.getMessage());
-        // Could return from secondary cache, database, or default value
+        // In a real application, this could return a value from a secondary cache,
+        // a database, or a sensible default value.
         return CompletableFuture.completedFuture(null);
     }
 
-    // Custom exception for better error handling
+    /**
+     * Custom exception to provide more specific error handling for Redis operations.
+     * This helps in distinguishing Redis-related failures from other runtime exceptions.
+     */
     public static class RedisOperationException extends RuntimeException {
         public RedisOperationException(String message, Throwable cause) {
             super(message, cause);
