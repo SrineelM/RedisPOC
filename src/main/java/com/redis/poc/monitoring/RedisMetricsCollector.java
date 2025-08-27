@@ -5,11 +5,10 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
+import java.util.Properties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
-
-import java.util.Properties;
 
 /**
  * A centralized service for collecting and exposing Redis-related metrics using Micrometer.
@@ -77,7 +76,10 @@ public class RedisMetricsCollector {
                 .register(meterRegistry);
 
         // A custom gauge to calculate and report the command success rate.
-        Gauge.builder("redis.command.success.rate", this, c -> c.totalCommands == 0 ? 1.0 : ((double) c.successfulCommands / c.totalCommands))
+        Gauge.builder(
+                        "redis.command.success.rate",
+                        this,
+                        c -> c.totalCommands == 0 ? 1.0 : ((double) c.successfulCommands / c.totalCommands))
                 .description("The ratio of successful Redis commands to total commands")
                 .register(meterRegistry);
     }
@@ -146,7 +148,8 @@ public class RedisMetricsCollector {
     public Double getUsedMemory() {
         try {
             // The INFO command can be slow; use with caution or on a background thread.
-            Properties info = redisTemplate.getConnectionFactory().getConnection().info("memory");
+            Properties info =
+                    redisTemplate.getConnectionFactory().getConnection().info("memory");
             if (info != null && info.getProperty("used_memory") != null) {
                 return Double.parseDouble(info.getProperty("used_memory"));
             }

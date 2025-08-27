@@ -2,15 +2,14 @@ package com.redis.poc.security;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
-import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import javax.crypto.SecretKey;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
 
 /**
  * Service responsible for generating and managing JSON Web Tokens (JWTs).
@@ -55,7 +54,8 @@ public class JwtService {
         Map<String, Object> claims = new HashMap<>();
         // 'aud' (Audience) claim: Specifies the intended recipient of the token.
         claims.put("aud", "redis-poc");
-        // 'jti' (JWT ID) claim: Provides a unique identifier for the token to prevent replay attacks and allow revocation.
+        // 'jti' (JWT ID) claim: Provides a unique identifier for the token to prevent replay attacks and allow
+        // revocation.
         claims.put("jti", jti);
         return createToken(claims, username);
     }
@@ -79,7 +79,10 @@ public class JwtService {
     public long getRemainingTtlSeconds(String token) {
         try {
             // Parse the token to extract its claims.
-            var claims = io.jsonwebtoken.Jwts.parser().build().parseSignedClaims(token).getPayload();
+            var claims = io.jsonwebtoken.Jwts.parser()
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
             long expMs = claims.getExpiration().getTime();
             long now = System.currentTimeMillis();
             // Return the difference in seconds, ensuring it's not negative.

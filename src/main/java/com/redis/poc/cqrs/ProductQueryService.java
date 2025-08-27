@@ -2,10 +2,9 @@ package com.redis.poc.cqrs;
 
 import com.redis.poc.domain.Product;
 import com.redis.poc.repository.ProductRepository;
+import java.util.List;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 /**
  * Service for querying product information.

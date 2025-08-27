@@ -1,9 +1,8 @@
 package com.redis.poc.controller;
 
 import com.redis.poc.service.LeaderboardService;
-import org.springframework.web.bind.annotation.*;
-
 import java.util.Set;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/leaderboard")

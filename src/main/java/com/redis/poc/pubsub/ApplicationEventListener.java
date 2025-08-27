@@ -44,13 +44,13 @@ public class ApplicationEventListener {
             log.info("[Business Logic] Revoked JWT with JTI '{}' has been cleared from the Redis denylist.", jti);
             // No further action is typically needed here.
 
-        // Example 2: A user's session has expired.
+            // Example 2: A user's session has expired.
         } else if (key.startsWith("session:")) {
             String sessionId = key.substring(8);
             log.warn("[Business Logic] User session '{}' expired. Triggering cleanup or notification.", sessionId);
             // TODO: Add logic to clean up related database entries, notify a user, or log for analytics.
 
-        // Example 3: A rate limit bucket has expired.
+            // Example 3: A rate limit bucket has expired.
         } else if (key.startsWith("rl:")) {
             log.debug("[Business Logic] Rate limit bucket '{}' expired and was cleaned up by Redis.", key);
             // This is usually informational and requires no action.

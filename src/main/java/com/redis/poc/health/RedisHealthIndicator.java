@@ -1,16 +1,15 @@
 package com.redis.poc.health;
 
 import io.lettuce.core.api.StatefulRedisConnection;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Properties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.actuate.health.AbstractHealthIndicator;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.Status;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Properties;
 
 /**
  * A custom Spring Boot Actuator Health Indicator for Redis.
@@ -27,8 +26,8 @@ public class RedisHealthIndicator extends AbstractHealthIndicator {
     private final RedisTemplate<String, Object> redisTemplate;
     private final StatefulRedisConnection<String, String> connection;
 
-    public RedisHealthIndicator(RedisTemplate<String, Object> redisTemplate,
-                               StatefulRedisConnection<String, String> connection) {
+    public RedisHealthIndicator(
+            RedisTemplate<String, Object> redisTemplate, StatefulRedisConnection<String, String> connection) {
         this.redisTemplate = redisTemplate;
         this.connection = connection;
     }
@@ -48,38 +47,34 @@ public class RedisHealthIndicator extends AbstractHealthIndicator {
 
             // 2. Check if the PING was successful.
             if (!"PONG".equals(pingResult)) {
-                builder.down()
-                       .withDetail("error", "Redis ping failed")
-                       .withDetail("response", pingResult);
+                builder.down().withDetail("error", "Redis ping failed").withDetail("response", pingResult);
                 return;
             }
 
             // 3. If successful, fetch detailed server information.
             // Note: The INFO command can have a minor performance impact.
-            Properties info = redisTemplate.getConnectionFactory()
+            Properties info = redisTemplate
+                    .getConnectionFactory()
                     .getConnection()
                     .serverCommands()
                     .info();
 
             // 4. Build the initial "UP" response with basic details.
-            builder.up()
-                   .withDetail("ping", "PONG")
-                   .withDetail("latency", latency.toMillis() + "ms");
+            builder.up().withDetail("ping", "PONG").withDetail("latency", latency.toMillis() + "ms");
 
             // 5. Add key metrics from the INFO command to the health details.
             if (info != null) {
-                builder
-                    .withDetail("redis_version", info.getProperty("redis_version"))
-                    .withDetail("used_memory_human", info.getProperty("used_memory_human"))
-                    .withDetail("connected_clients", info.getProperty("connected_clients"))
-                    .withDetail("uptime_in_seconds", info.getProperty("uptime_in_seconds"));
+                builder.withDetail("redis_version", info.getProperty("redis_version"))
+                        .withDetail("used_memory_human", info.getProperty("used_memory_human"))
+                        .withDetail("connected_clients", info.getProperty("connected_clients"))
+                        .withDetail("uptime_in_seconds", info.getProperty("uptime_in_seconds"));
             }
 
             // 6. Enhance the health status based on latency thresholds.
             if (latency.toMillis() > 1000) {
                 // If latency is critical, downgrade the status to DOWN.
                 builder.status(Status.DOWN)
-                       .withDetail("warning", "High latency detected: " + latency.toMillis() + "ms");
+                        .withDetail("warning", "High latency detected: " + latency.toMillis() + "ms");
             } else if (latency.toMillis() > 100) {
                 // If latency is elevated, keep status UP but add a warning.
                 builder.withDetail("warning", "Elevated latency: " + latency.toMillis() + "ms");
@@ -88,9 +83,7 @@ public class RedisHealthIndicator extends AbstractHealthIndicator {
         } catch (Exception e) {
             // 7. If any exception occurs, report the service as DOWN.
             log.error("Redis health check failed", e);
-            builder.down()
-                   .withDetail("error", e.getClass().getSimpleName())
-                   .withDetail("message", e.getMessage());
+            builder.down().withDetail("error", e.getClass().getSimpleName()).withDetail("message", e.getMessage());
         }
     }
 }

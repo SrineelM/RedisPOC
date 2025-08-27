@@ -2,14 +2,13 @@ package com.redis.poc.controller;
 
 import com.redis.poc.streams.OrderEvent;
 import com.redis.poc.streams.OrderEventProducer;
+import java.util.Map;
 import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 /**
  * REST controller for demonstrating Redis Streams functionality.
@@ -38,9 +37,6 @@ public class StreamController {
     @PostMapping("/publish")
     public ResponseEntity<Map<String, String>> publishOrderEvent(@RequestBody OrderEvent event) {
         RecordId recordId = orderEventProducer.publishOrderEvent(event);
-        return ResponseEntity.ok(Map.of(
-                "status", "event published",
-                "messageId", recordId.getValue()
-        ));
+        return ResponseEntity.ok(Map.of("status", "event published", "messageId", recordId.getValue()));
     }
 }

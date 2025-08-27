@@ -3,22 +3,20 @@ package com.redis.poc.exception;
 import io.lettuce.core.RedisCommandTimeoutException;
 import io.lettuce.core.RedisConnectionException;
 import jakarta.validation.ConstraintViolationException;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
-
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
 
 /**
  * A centralized exception handler for the entire application.
@@ -36,7 +34,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex, WebRequest request) {
         Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getFieldErrors()
+        ex.getBindingResult()
+                .getFieldErrors()
                 .forEach(error -> errors.put(error.getField(), error.getDefaultMessage()));
 
         ErrorResponse body = baseBuilder(HttpStatus.BAD_REQUEST, "Validation failed", request)
@@ -50,8 +49,10 @@ public class GlobalExceptionHandler {
      * Returns a 400 Bad Request.
      */
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex, WebRequest request) {
-        ErrorResponse body = baseBuilder(HttpStatus.BAD_REQUEST, ex.getMessage(), request).build();
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(
+            ConstraintViolationException ex, WebRequest request) {
+        ErrorResponse body =
+                baseBuilder(HttpStatus.BAD_REQUEST, ex.getMessage(), request).build();
         return ResponseEntity.badRequest().body(body);
     }
 
@@ -61,7 +62,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex, WebRequest request) {
-        ErrorResponse body = baseBuilder(HttpStatus.UNAUTHORIZED, "Invalid credentials provided", request).build();
+        ErrorResponse body = baseBuilder(HttpStatus.UNAUTHORIZED, "Invalid credentials provided", request)
+                .build();
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
     }
 
@@ -71,7 +73,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
-        ErrorResponse body = baseBuilder(HttpStatus.FORBIDDEN, "Access is denied", request).build();
+        ErrorResponse body =
+                baseBuilder(HttpStatus.FORBIDDEN, "Access is denied", request).build();
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
     }
 
@@ -82,7 +85,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RedisConnectionException.class)
     public ResponseEntity<ErrorResponse> handleRedisConnection(RedisConnectionException ex, WebRequest request) {
         log.error("Redis connection error: {}. Path: {}", ex.getMessage(), getPath(request));
-        ErrorResponse body = baseBuilder(HttpStatus.SERVICE_UNAVAILABLE, "The cache service is currently unavailable. Please try again later.", request).build();
+        ErrorResponse body = baseBuilder(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "The cache service is currently unavailable. Please try again later.",
+                        request)
+                .build();
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body);
     }
 
@@ -93,7 +100,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RedisCommandTimeoutException.class)
     public ResponseEntity<ErrorResponse> handleRedisTimeout(RedisCommandTimeoutException ex, WebRequest request) {
         log.error("Redis command timed out: {}. Path: {}", ex.getMessage(), getPath(request));
-        ErrorResponse body = baseBuilder(HttpStatus.REQUEST_TIMEOUT, "The cache operation timed out. Please try again.", request).build();
+        ErrorResponse body = baseBuilder(
+                        HttpStatus.REQUEST_TIMEOUT, "The cache operation timed out. Please try again.", request)
+                .build();
         return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body(body);
     }
 
@@ -103,7 +112,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex, WebRequest request) {
-        ErrorResponse body = baseBuilder(HttpStatus.BAD_REQUEST, ex.getMessage(), request).build();
+        ErrorResponse body =
+                baseBuilder(HttpStatus.BAD_REQUEST, ex.getMessage(), request).build();
         return ResponseEntity.badRequest().body(body);
     }
 
@@ -115,7 +125,8 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, WebRequest request) {
         String traceId = UUID.randomUUID().toString();
         log.error("Unhandled exception occurred with traceId: {}", traceId, ex);
-        ErrorResponse body = baseBuilder(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected internal error occurred.", request)
+        ErrorResponse body = baseBuilder(
+                        HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected internal error occurred.", request)
                 .traceId(traceId) // Ensure traceId is set for the final response
                 .build();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);

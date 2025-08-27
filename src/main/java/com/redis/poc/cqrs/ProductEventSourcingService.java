@@ -4,17 +4,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.redis.poc.cqrs.event.ProductEvent;
 import com.redis.poc.cqrs.event.ProductEventStore;
 import com.redis.poc.domain.Product;
-import org.springframework.stereotype.Service;
-import jakarta.annotation.PostConstruct;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.beans.factory.annotation.Value;
+import jakarta.annotation.PostConstruct;
 import java.time.Instant;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
 
 /**
  * Service responsible for event sourcing of product data.
@@ -30,15 +29,23 @@ public class ProductEventSourcingService {
     private volatile Instant lastSnapshotTime = Instant.EPOCH;
     private final Timer snapshotTimer;
     private final StringRedisTemplate stringRedisTemplate;
+
     @Value("${product.events.idempotency-ttl-seconds:86400}")
     private long idempotencyTtlSeconds;
+
     private static final String IDEMPOTENCY_SET_KEY = "product:events:processed";
 
-    public ProductEventSourcingService(ProductEventStore eventStore, ObjectMapper objectMapper, MeterRegistry meterRegistry, StringRedisTemplate stringRedisTemplate) {
+    public ProductEventSourcingService(
+            ProductEventStore eventStore,
+            ObjectMapper objectMapper,
+            MeterRegistry meterRegistry,
+            StringRedisTemplate stringRedisTemplate) {
         this.eventStore = eventStore;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
-        this.snapshotTimer = Timer.builder("product.snapshot.duration").publishPercentileHistogram().register(meterRegistry);
+        this.snapshotTimer = Timer.builder("product.snapshot.duration")
+                .publishPercentileHistogram()
+                .register(meterRegistry);
         this.stringRedisTemplate = stringRedisTemplate;
     }
 
@@ -48,8 +55,13 @@ public class ProductEventSourcingService {
     @PostConstruct
     void registerGauges() {
         meterRegistry.gauge("product.snapshot.count", snapshotCount);
-        meterRegistry.gauge("product.snapshot.age.seconds", this, s ->
-                lastSnapshotTime == null ? -1.0 : (double) java.time.Duration.between(lastSnapshotTime, Instant.now()).getSeconds());
+        meterRegistry.gauge(
+                "product.snapshot.age.seconds",
+                this,
+                s -> lastSnapshotTime == null
+                        ? -1.0
+                        : (double) java.time.Duration.between(lastSnapshotTime, Instant.now())
+                                .getSeconds());
     }
 
     /**
@@ -87,9 +99,9 @@ public class ProductEventSourcingService {
      * @param productId The ID of the product that was deleted.
      */
     public void recordDelete(String productId) {
-    ProductEvent event = new ProductEvent(ProductEvent.Type.DELETED, productId, null);
-    appendWithIdempotency(event);
-    maybeSnapshot();
+        ProductEvent event = new ProductEvent(ProductEvent.Type.DELETED, productId, null);
+        appendWithIdempotency(event);
+        maybeSnapshot();
     }
 
     /**
@@ -113,8 +125,9 @@ public class ProductEventSourcingService {
         for (Object e : events) {
             if (e instanceof ProductEvent) {
                 ProductEvent ev = (ProductEvent) e;
-                String uniqueKey = ev.getType()+":"+ev.getProductId()+":"+ev.getTimestamp();
-                if (Boolean.TRUE.equals(stringRedisTemplate.opsForSet().isMember(IDEMPOTENCY_SET_KEY, uniqueKey)) || !localProcessed.add(uniqueKey)) {
+                String uniqueKey = ev.getType() + ":" + ev.getProductId() + ":" + ev.getTimestamp();
+                if (Boolean.TRUE.equals(stringRedisTemplate.opsForSet().isMember(IDEMPOTENCY_SET_KEY, uniqueKey))
+                        || !localProcessed.add(uniqueKey)) {
                     continue; // already applied
                 }
                 if (ev.getType() != ProductEvent.Type.DELETED) {
@@ -159,7 +172,7 @@ public class ProductEventSourcingService {
      * @param event The event to append.
      */
     private void appendWithIdempotency(ProductEvent event) {
-        String uniqueKey = event.getType()+":"+event.getProductId()+":"+event.getTimestamp();
+        String uniqueKey = event.getType() + ":" + event.getProductId() + ":" + event.getTimestamp();
         Boolean exists = stringRedisTemplate.opsForSet().isMember(IDEMPOTENCY_SET_KEY, uniqueKey);
         if (Boolean.TRUE.equals(exists)) return;
         eventStore.appendEvent(event);

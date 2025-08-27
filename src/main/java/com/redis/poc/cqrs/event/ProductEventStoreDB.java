@@ -1,9 +1,9 @@
 package com.redis.poc.cqrs.event;
 
 import com.eventstore.dbclient.*;
-import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.stereotype.Component;
 
 /**
  * Integrates with EventStoreDB to persist and read product events.
@@ -17,7 +17,8 @@ public class ProductEventStoreDB {
     public ProductEventStoreDB() {
         // In a production environment, use external configuration (e.g., application.properties)
         // for the connection string and handle credentials securely.
-        EventStoreDBClientSettings settings = EventStoreDBConnectionString.parseOrThrow("esdb://localhost:2113?tls=false");
+        EventStoreDBClientSettings settings =
+                EventStoreDBConnectionString.parseOrThrow("esdb://localhost:2113?tls=false");
         this.client = EventStoreDBClient.create(settings);
     }
 

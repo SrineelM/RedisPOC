@@ -7,17 +7,16 @@ import io.lettuce.core.TimeoutOptions;
 import io.lettuce.core.protocol.ProtocolVersion;
 import io.lettuce.core.resource.ClientResources;
 import io.lettuce.core.resource.DefaultClientResources;
+import java.time.Duration;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
-import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
-
-import java.time.Duration;
 
 /**
  * Provides a highly customized, production-grade configuration for the Lettuce Redis client.
@@ -53,7 +52,7 @@ public class EnhancedLettuceConfig {
     @Bean(destroyMethod = "shutdown")
     public ClientResources clientResources() {
         return DefaultClientResources.builder()
-                .ioThreadPoolSize(4)  // Default is Netty's default (2 * available processors)
+                .ioThreadPoolSize(4) // Default is Netty's default (2 * available processors)
                 .computationThreadPoolSize(4) // Default is Netty's default
                 .build();
     }
@@ -75,9 +74,8 @@ public class EnhancedLettuceConfig {
                 .build();
 
         // Configures timeouts for Redis commands.
-        TimeoutOptions timeoutOptions = TimeoutOptions.builder()
-                .fixedTimeout(timeout)
-                .build();
+        TimeoutOptions timeoutOptions =
+                TimeoutOptions.builder().fixedTimeout(timeout).build();
 
         // Main client options configuration.
         ClientOptions clientOptions = ClientOptions.builder()
@@ -85,8 +83,8 @@ public class EnhancedLettuceConfig {
                 .timeoutOptions(timeoutOptions)
                 .autoReconnect(true) // Enable auto-reconnect for resilience
                 .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS) // Fail fast when disconnected
-                .protocolVersion(ProtocolVersion.RESP3)  // Use the latest Redis protocol
-                .publishOnScheduler(true)  // Improves performance for Pub/Sub operations
+                .protocolVersion(ProtocolVersion.RESP3) // Use the latest Redis protocol
+                .publishOnScheduler(true) // Improves performance for Pub/Sub operations
                 .build();
 
         String redisUri = buildRedisUri();
@@ -104,28 +102,28 @@ public class EnhancedLettuceConfig {
     @Bean
     public RedisConnectionFactory redisConnectionFactory(ClientResources clientResources) {
         RedisStandaloneConfiguration redisConfig = new RedisStandaloneConfiguration(redisHost, redisPort);
-        
+
         // Configuration for the connection pool using Apache Commons Pool2.
         GenericObjectPoolConfig<?> poolConfig = new GenericObjectPoolConfig<>();
         poolConfig.setMaxTotal(20); // Max number of connections in the pool
-        poolConfig.setMaxIdle(10);  // Max number of idle connections
-        poolConfig.setMinIdle(2);   // Min number of idle connections to maintain
+        poolConfig.setMaxIdle(10); // Max number of idle connections
+        poolConfig.setMinIdle(2); // Min number of idle connections to maintain
         poolConfig.setTestOnBorrow(true); // Validate connections before they are borrowed from the pool
         poolConfig.setBlockWhenExhausted(true); // Block when the pool is exhausted, rather than failing
         poolConfig.setMaxWait(timeout); // How long to wait for a connection when the pool is exhausted
-        
+
         // Creates the pooling configuration for the Lettuce client.
         LettucePoolingClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
-            .clientResources(clientResources)
-            .commandTimeout(timeout)
-            .poolConfig(poolConfig)
-            .build();
-        
+                .clientResources(clientResources)
+                .commandTimeout(timeout)
+                .poolConfig(poolConfig)
+                .build();
+
         LettuceConnectionFactory factory = new LettuceConnectionFactory(redisConfig, clientConfig);
         // It's often recommended to not share the native connection for high-concurrency applications
         // to ensure each thread gets its own connection from the pool.
         factory.setShareNativeConnection(false);
-        
+
         return factory;
     }
 

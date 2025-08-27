@@ -1,10 +1,9 @@
 package com.redis.poc.cqrs.event;
 
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.stereotype.Component;
-
 import java.util.List;
 import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Component;
 
 /**
  * Manages the persistence of product events and snapshots using Redis.
@@ -68,8 +67,9 @@ public class ProductEventStore {
     public java.util.List<java.util.Map<String, Object>> readEventsFromStream(String from, String to) {
         // For production: Use XREADGROUP with consumer groups for scalable, resilient consumption.
         // The current XRANGE approach is simpler for demonstration.
-        List<MapRecord<String, Object, Object>> records = redisTemplate.opsForStream()
-        .range(EVENT_STREAM_KEY + ":stream", org.springframework.data.domain.Range.closed(from, to));
+        List<MapRecord<String, Object, Object>> records = redisTemplate
+                .opsForStream()
+                .range(EVENT_STREAM_KEY + ":stream", org.springframework.data.domain.Range.closed(from, to));
         java.util.List<java.util.Map<String, Object>> events = new java.util.ArrayList<>();
         if (records != null) {
             for (MapRecord<String, Object, Object> record : records) {
@@ -102,5 +102,4 @@ public class ProductEventStore {
     public Object loadSnapshot(String aggregateId) {
         return redisTemplate.opsForHash().get("product:snapshots", aggregateId);
     }
-
 }

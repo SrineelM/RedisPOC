@@ -4,15 +4,13 @@ import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
+import io.lettuce.core.RedisFuture;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.lettuce.core.api.sync.RedisCommands;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.tracing.annotation.NewSpan;
 import io.micrometer.tracing.annotation.SpanTag;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
@@ -20,7 +18,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import io.lettuce.core.RedisFuture;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 /**
  * An enhanced Redis service that provides resilient, observable, and performant
@@ -60,28 +59,30 @@ public class EnhancedRedisService {
     @Timed(value = "redis.operations", description = "Time taken for Redis operations")
     @NewSpan("redis-get")
     public CompletableFuture<String> getValueWithFullResilience(@SpanTag("key") String key) {
-        return CompletableFuture.supplyAsync(() -> {
-            log.debug("Executing Redis GET for key: {}", key);
-            
-            try {
-                // Use synchronous commands here as the entire block is already async.
-                RedisCommands<String, String> commands = connection.sync();
-                String value = commands.get(key);
-                
-                // Add custom metrics/logging for cache hits and misses.
-                if (value != null) {
-                    log.info("Cache HIT for key: {}", key);
-                } else {
-                    log.info("Cache MISS for key: {}", key);
-                }
-                
-                return value;
-            } catch (Exception e) {
-                log.error("Redis operation failed for key: {}", key, e);
-                // Wrap the exception for better error handling upstream.
-                throw new RedisOperationException("Failed to get value for key: " + key, e);
-            }
-    }, redisAsyncExecutor);
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    log.debug("Executing Redis GET for key: {}", key);
+
+                    try {
+                        // Use synchronous commands here as the entire block is already async.
+                        RedisCommands<String, String> commands = connection.sync();
+                        String value = commands.get(key);
+
+                        // Add custom metrics/logging for cache hits and misses.
+                        if (value != null) {
+                            log.info("Cache HIT for key: {}", key);
+                        } else {
+                            log.info("Cache MISS for key: {}", key);
+                        }
+
+                        return value;
+                    } catch (Exception e) {
+                        log.error("Redis operation failed for key: {}", key, e);
+                        // Wrap the exception for better error handling upstream.
+                        throw new RedisOperationException("Failed to get value for key: " + key, e);
+                    }
+                },
+                redisAsyncExecutor);
     }
 
     /**
@@ -99,36 +100,38 @@ public class EnhancedRedisService {
     @Timed(value = "redis.batch.operations")
     @NewSpan("redis-batch-get")
     public CompletableFuture<List<String>> getBatchValues(@SpanTag("keys") List<String> keys) {
-        return CompletableFuture.supplyAsync(() -> {
-            if (keys.isEmpty()) {
-                return Collections.emptyList();
-            }
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    if (keys.isEmpty()) {
+                        return Collections.emptyList();
+                    }
 
-            // Use asynchronous commands for pipelining.
-            RedisAsyncCommands<String, String> async = connection.async();
-            // Disable auto-flushing to manually control when commands are sent.
-            async.setAutoFlushCommands(false); // Enable pipelining
+                    // Use asynchronous commands for pipelining.
+                    RedisAsyncCommands<String, String> async = connection.async();
+                    // Disable auto-flushing to manually control when commands are sent.
+                    async.setAutoFlushCommands(false); // Enable pipelining
 
-            // Create a list of futures, one for each GET command.
-            List<RedisFuture<String>> futures = keys.stream()
-                    .map(async::get)
-                    .collect(Collectors.toList());
+                    // Create a list of futures, one for each GET command.
+                    List<RedisFuture<String>> futures =
+                            keys.stream().map(async::get).collect(Collectors.toList());
 
-            // Manually flush the commands, sending them all to Redis in one go.
-            async.flushCommands(); // Execute all commands
+                    // Manually flush the commands, sending them all to Redis in one go.
+                    async.flushCommands(); // Execute all commands
 
-            // Wait for all futures to complete and collect the results.
-            return futures.stream()
-                    .map(future -> {
-                        try {
-                            // Wait for each future to complete with a timeout.
-                            return future.get(5, TimeUnit.SECONDS);
-                        } catch (Exception e) {
-                            log.error("Failed to get value in batch operation", e);
-                            return null; // Return null for failed individual retrievals.
-                        }                    })
-                    .collect(Collectors.toList());
-    }, redisAsyncExecutor);
+                    // Wait for all futures to complete and collect the results.
+                    return futures.stream()
+                            .map(future -> {
+                                try {
+                                    // Wait for each future to complete with a timeout.
+                                    return future.get(5, TimeUnit.SECONDS);
+                                } catch (Exception e) {
+                                    log.error("Failed to get value in batch operation", e);
+                                    return null; // Return null for failed individual retrievals.
+                                }
+                            })
+                            .collect(Collectors.toList());
+                },
+                redisAsyncExecutor);
     }
 
     /**
@@ -145,43 +148,43 @@ public class EnhancedRedisService {
     @Timed(value = "redis.set.operations")
     @NewSpan("redis-set")
     public CompletableFuture<Boolean> setValueWithValidation(
-            @SpanTag("key") String key, 
-            @SpanTag("value") String value, 
-            Duration ttl) {
-        
-    return CompletableFuture.supplyAsync(() -> {
-            // --- Input Validation ---
-            if (key == null || key.trim().isEmpty()) {
-                throw new IllegalArgumentException("Key cannot be null or empty");
-            }
-            if (value == null) {
-                throw new IllegalArgumentException("Value cannot be null");
-            }
-            if (ttl != null && ttl.isNegative()) {
-                throw new IllegalArgumentException("TTL cannot be negative");
-            }
+            @SpanTag("key") String key, @SpanTag("value") String value, Duration ttl) {
 
-            try {
-                RedisCommands<String, String> commands = connection.sync();
-                String result;
-                
-                // Use SETEX if a TTL is provided to set the value and expiration atomically.
-                if (ttl != null) {
-                    result = commands.setex(key, ttl.getSeconds(), value);
-                } else {
-                    result = commands.set(key, value);
-                }
-                
-                // Redis SET commands return "OK" on success.
-                boolean success = "OK".equals(result);
-                log.debug("Set operation for key '{}' completed with result: {}", key, success);
-                return success;
-                
-            } catch (Exception e) {
-                log.error("Redis SET operation failed for key: {}", key, e);
-                throw new RedisOperationException("Failed to set value for key: " + key, e);
-            }
-    }, redisAsyncExecutor);
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    // --- Input Validation ---
+                    if (key == null || key.trim().isEmpty()) {
+                        throw new IllegalArgumentException("Key cannot be null or empty");
+                    }
+                    if (value == null) {
+                        throw new IllegalArgumentException("Value cannot be null");
+                    }
+                    if (ttl != null && ttl.isNegative()) {
+                        throw new IllegalArgumentException("TTL cannot be negative");
+                    }
+
+                    try {
+                        RedisCommands<String, String> commands = connection.sync();
+                        String result;
+
+                        // Use SETEX if a TTL is provided to set the value and expiration atomically.
+                        if (ttl != null) {
+                            result = commands.setex(key, ttl.getSeconds(), value);
+                        } else {
+                            result = commands.set(key, value);
+                        }
+
+                        // Redis SET commands return "OK" on success.
+                        boolean success = "OK".equals(result);
+                        log.debug("Set operation for key '{}' completed with result: {}", key, success);
+                        return success;
+
+                    } catch (Exception e) {
+                        log.error("Redis SET operation failed for key: {}", key, e);
+                        throw new RedisOperationException("Failed to set value for key: " + key, e);
+                    }
+                },
+                redisAsyncExecutor);
     }
 
     /**

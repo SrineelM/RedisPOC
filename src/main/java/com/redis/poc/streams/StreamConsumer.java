@@ -2,6 +2,11 @@ package com.redis.poc.streams;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.RedisSystemException;
@@ -9,12 +14,6 @@ import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-
-import java.time.Duration;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A robust service that consumes and processes events from a Redis Stream using a consumer group.
@@ -48,7 +47,8 @@ public class StreamConsumer {
     private static final String GROUP_NAME = "order-processors";
 
     /** A unique name for this specific consumer instance within the group. */
-    private static final String CONSUMER_NAME = "consumer-1"; // In a real-world app, this could be dynamic (e.g., pod name).
+    private static final String CONSUMER_NAME =
+            "consumer-1"; // In a real-world app, this could be dynamic (e.g., pod name).
 
     /** The stream key for the Dead-Letter Queue, where failed messages are sent. */
     private static final String DLQ_STREAM_KEY = "orders:dlq";
@@ -113,13 +113,15 @@ public class StreamConsumer {
             // only new messages that have not yet been delivered to any consumer in this group.
             // This is the standard way to consume a stream with a group.
             @SuppressWarnings("unchecked")
-            List<MapRecord<String, Object, Object>> messages = redisTemplate.opsForStream().read(
-                    Consumer.from(GROUP_NAME, CONSUMER_NAME),
-                    StreamReadOptions.empty()
-                            .count(10) // Read up to 10 messages at a time.
-                            .block(Duration.ofSeconds(2)), // Block for 2s if no messages, to avoid busy-polling.
-                    StreamOffset.create(STREAM_KEY, ReadOffset.lastConsumed())
-            );
+            List<MapRecord<String, Object, Object>> messages = redisTemplate
+                    .opsForStream()
+                    .read(
+                            Consumer.from(GROUP_NAME, CONSUMER_NAME),
+                            StreamReadOptions.empty()
+                                    .count(10) // Read up to 10 messages at a time.
+                                    .block(Duration.ofSeconds(
+                                            2)), // Block for 2s if no messages, to avoid busy-polling.
+                            StreamOffset.create(STREAM_KEY, ReadOffset.lastConsumed()));
 
             if (messages != null && !messages.isEmpty()) {
                 log.debug("Received {} new messages from stream '{}'.", messages.size(), STREAM_KEY);
@@ -152,7 +154,8 @@ public class StreamConsumer {
             // It sets the key only if it does not already exist and returns true if it was set.
             // This prevents a race condition where two consumers could process the same message
             // if it was redelivered after a failure.
-            Boolean wasSet = redisTemplate.opsForValue().setIfAbsent(processedKey, "1", idempotencyTtlSeconds, TimeUnit.SECONDS);
+            Boolean wasSet =
+                    redisTemplate.opsForValue().setIfAbsent(processedKey, "1", idempotencyTtlSeconds, TimeUnit.SECONDS);
 
             if (Boolean.FALSE.equals(wasSet)) {
                 // If the key was already present, `setIfAbsent` returns false.
@@ -183,11 +186,15 @@ public class StreamConsumer {
             // --- Dead-Letter Queue Logic ---
             // If any exception occurs, move the problematic message to the DLQ for later inspection.
             // We add the original message ID and the error message for better context.
-            redisTemplate.opsForStream().add(MapRecord.create(DLQ_STREAM_KEY, Map.of(
-                    "original_message_id", messageId,
-                    "error", e.getMessage(),
-                    "payload", message.getValue().toString() // Store original payload
-            )));
+            redisTemplate
+                    .opsForStream()
+                    .add(MapRecord.create(
+                            DLQ_STREAM_KEY,
+                            Map.of(
+                                    "original_message_id", messageId,
+                                    "error", e.getMessage(),
+                                    "payload", message.getValue().toString() // Store original payload
+                                    )));
 
             // --- CRITICAL STEP ---
             // Acknowledge the original message even after failure. This is vital.

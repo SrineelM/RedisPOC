@@ -3,6 +3,8 @@ package com.redis.poc.ratelimit;
 import com.redis.poc.audit.AuditLogger;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.time.Instant;
+import java.util.Collections;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
@@ -14,9 +16,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-import java.time.Instant;
-import java.util.Collections;
-
 /**
  * A robust rate-limiting interceptor that uses Redis and a Lua script to implement
  * a token bucket algorithm. This interceptor provides a more sophisticated approach
@@ -25,7 +24,7 @@ import java.util.Collections;
  *
  * The token bucket algorithm is used to control the rate of incoming requests. Each client
  * (identified by IP address or user ID) has a bucket of tokens that refills at a constant
-rate.
+ * rate.
  * Each request consumes one token from the bucket. If the bucket is empty, the request is
  * rejected. This approach allows for bursts of requests while still maintaining a long-term
  * average rate.
@@ -94,7 +93,8 @@ public class EnhancedRateLimitInterceptor implements HandlerInterceptor {
      * @throws Exception if an error occurs.
      */
     @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
+            throws Exception {
         // Determine the client key for rate limiting (based on user or IP).
         String clientKey = getClientKey(request);
         long now = Instant.now().getEpochSecond();
@@ -115,12 +115,12 @@ public class EnhancedRateLimitInterceptor implements HandlerInterceptor {
         Long allowed = redisTemplate.execute(
                 redisScript,
                 Collections.singletonList(clientKey), // KEYS[1]
-                String.valueOf(effectiveRate),       // ARGV[1]
-                String.valueOf(effectiveCapacity),   // ARGV[2]
-                String.valueOf(now),                 // ARGV[3]
-                String.valueOf(refillSeconds),       // ARGV[4]
-                "1"                                  // ARGV[5] - tokens to consume
-        );
+                String.valueOf(effectiveRate), // ARGV[1]
+                String.valueOf(effectiveCapacity), // ARGV[2]
+                String.valueOf(now), // ARGV[3]
+                String.valueOf(refillSeconds), // ARGV[4]
+                "1" // ARGV[5] - tokens to consume
+                );
 
         String username = auth != null ? auth.getName() : "anonymous";
         boolean isAllowed = allowed != null && allowed == 1L;
@@ -199,12 +199,15 @@ public class EnhancedRateLimitInterceptor implements HandlerInterceptor {
             String tokensStr = (String) redisTemplate.opsForHash().get(key, "tokens");
             int remainingTokens = tokensStr != null ? (int) Double.parseDouble(tokensStr) : capacity;
             // Calculate the time until the bucket is fully refilled.
-            long resetSeconds = Math.max(1, (long) Math.ceil((double) (capacity - remainingTokens) / Math.max(1, rate)));
+            long resetSeconds =
+                    Math.max(1, (long) Math.ceil((double) (capacity - remainingTokens) / Math.max(1, rate)));
 
             // Set the standard rate limit headers.
             response.setHeader("X-RateLimit-Limit", String.valueOf(capacity));
             response.setHeader("X-RateLimit-Remaining", String.valueOf(Math.max(0, remainingTokens)));
-            response.setHeader("X-RateLimit-Reset", String.valueOf(Instant.now().plusSeconds(resetSeconds).getEpochSecond()));
+            response.setHeader(
+                    "X-RateLimit-Reset",
+                    String.valueOf(Instant.now().plusSeconds(resetSeconds).getEpochSecond()));
             response.setHeader("Retry-After", String.valueOf(resetSeconds));
         } catch (Exception e) {
             log.debug("Failed to add rate limit headers", e);

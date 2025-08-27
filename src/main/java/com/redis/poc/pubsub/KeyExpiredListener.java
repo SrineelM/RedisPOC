@@ -20,7 +20,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class KeyExpiredListener implements MessageListener {
 
-    // The ApplicationEventPublisher is a Spring infrastructure component used to publish events to the application context.
+    // The ApplicationEventPublisher is a Spring infrastructure component used to publish events to the application
+    // context.
     private final ApplicationEventPublisher publisher;
 
     /**

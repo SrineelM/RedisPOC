@@ -1,14 +1,13 @@
 package com.redis.poc.service;
 
+import java.time.Duration;
+import java.util.Collections;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
-
-import java.time.Duration;
-import java.util.Collections;
-import java.util.UUID;
 
 /**
  * Service for handling distributed locks using Redis.
@@ -31,7 +30,8 @@ public class DistributedLockService {
         // before deleting it. This is a crucial step to prevent a client from erroneously
         // releasing a lock that it no longer holds (e.g., if the lock expired and was
         // acquired by another client).
-        String script = "if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end";
+        String script =
+                "if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end";
         this.releaseScript = new DefaultRedisScript<>(script, Long.class);
     }
 

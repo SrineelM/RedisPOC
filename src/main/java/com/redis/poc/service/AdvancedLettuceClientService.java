@@ -9,18 +9,16 @@ import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.tracing.annotation.NewSpan;
 import io.micrometer.tracing.annotation.SpanTag;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Service;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
 
 /**
  * Dual-Pattern Redis Service demonstrating BOTH RedisTemplate and Pure Lettuce approaches.
@@ -62,9 +60,10 @@ public class AdvancedLettuceClientService {
      * @param connectionFactory Factory for getting pooled connections
      * @param redisClient Pure Lettuce client for direct operations
      */
-    public AdvancedLettuceClientService(RedisTemplate<String, String> redisTemplate,
-                                      RedisConnectionFactory connectionFactory,
-                                      RedisClient redisClient) {
+    public AdvancedLettuceClientService(
+            RedisTemplate<String, String> redisTemplate,
+            RedisConnectionFactory connectionFactory,
+            RedisClient redisClient) {
         this.redisTemplate = redisTemplate;
         this.connectionFactory = connectionFactory;
         this.redisClient = redisClient;
@@ -139,14 +138,12 @@ public class AdvancedLettuceClientService {
             List<String> values = redisTemplate.opsForValue().multiGet(keys);
 
             Map<String, String> result = keys.stream()
-                    .collect(Collectors.toMap(
-                            key -> key,
-                            key -> {
-                                int index = keys.indexOf(key);
-                                return values != null && index < values.size() ? values.get(index) : null;
-                            }
-                    ))
-                    .entrySet().stream()
+                    .collect(Collectors.toMap(key -> key, key -> {
+                        int index = keys.indexOf(key);
+                        return values != null && index < values.size() ? values.get(index) : null;
+                    }))
+                    .entrySet()
+                    .stream()
                     .filter(entry -> entry.getValue() != null)
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
@@ -175,16 +172,15 @@ public class AdvancedLettuceClientService {
         log.debug("[Pure-Lettuce] Executing async GET for key: {}", key);
 
         return executeWithLettuceAsync(async -> {
-            return async.get(key).toCompletableFuture()
-                    .whenComplete((value, throwable) -> {
-                        if (throwable != null) {
-                            log.error("[Pure-Lettuce] Async operation failed for key: {}", key, throwable);
-                        } else if (value != null) {
-                            log.debug("[Pure-Lettuce] Async cache HIT for key: {}", key);
-                        } else {
-                            log.debug("[Pure-Lettuce] Async cache MISS for key: {}", key);
-                        }
-                    });
+            return async.get(key).toCompletableFuture().whenComplete((value, throwable) -> {
+                if (throwable != null) {
+                    log.error("[Pure-Lettuce] Async operation failed for key: {}", key, throwable);
+                } else if (value != null) {
+                    log.debug("[Pure-Lettuce] Async cache HIT for key: {}", key);
+                } else {
+                    log.debug("[Pure-Lettuce] Async cache MISS for key: {}", key);
+                }
+            });
         });
     }
 
@@ -212,9 +208,7 @@ public class AdvancedLettuceClientService {
                 // Create futures for all GET operations
                 Map<String, CompletableFuture<String>> futures = keys.stream()
                         .collect(Collectors.toMap(
-                                key -> key,
-                                key -> async.get(key).toCompletableFuture()
-                        ));
+                                key -> key, key -> async.get(key).toCompletableFuture()));
 
                 // Flush all commands at once (pipelining magic!)
                 async.flushCommands();
@@ -223,25 +217,27 @@ public class AdvancedLettuceClientService {
                 return CompletableFuture.allOf(futures.values().toArray(new CompletableFuture[0]))
                         .thenApply(v -> {
                             Map<String, String> results = futures.entrySet().stream()
-                                    .collect(Collectors.toMap(
-                                            Map.Entry::getKey,
-                                            entry -> {
-                                                try {
-                                                    return entry.getValue().join();
-                                                } catch (Exception e) {
-                                                    log.warn("[Pure-Lettuce-Batch] Failed to get value for key: {}", entry.getKey(), e);
-                                                    return null;
-                                                }
-                                            }
-                                    ));
+                                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
+                                        try {
+                                            return entry.getValue().join();
+                                        } catch (Exception e) {
+                                            log.warn(
+                                                    "[Pure-Lettuce-Batch] Failed to get value for key: {}",
+                                                    entry.getKey(),
+                                                    e);
+                                            return null;
+                                        }
+                                    }));
 
                             // Filter out null values
                             Map<String, String> filteredResults = results.entrySet().stream()
                                     .filter(entry -> entry.getValue() != null)
                                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-                            log.debug("[Pure-Lettuce-Batch] Retrieved {} out of {} keys using pipelining",
-                                     filteredResults.size(), keys.size());
+                            log.debug(
+                                    "[Pure-Lettuce-Batch] Retrieved {} out of {} keys using pipelining",
+                                    filteredResults.size(),
+                                    keys.size());
                             return filteredResults;
                         });
             } finally {
@@ -259,9 +255,8 @@ public class AdvancedLettuceClientService {
     @Retry(name = RESILIENCE_BACKEND)
     @Timed(value = "redis.lettuce.set", description = "Pure Lettuce SET operations")
     @NewSpan("redis-lettuce-set")
-    public CompletableFuture<Boolean> setValueAsyncWithPureLettuce(@SpanTag("key") String key,
-                                                                 @SpanTag("value") String value,
-                                                                 Duration ttl) {
+    public CompletableFuture<Boolean> setValueAsyncWithPureLettuce(
+            @SpanTag("key") String key, @SpanTag("value") String value, Duration ttl) {
         log.debug("[Pure-Lettuce] Executing async SET for key: {} with TTL: {}", key, ttl);
 
         return executeWithLettuceAsync(async -> {
@@ -272,14 +267,13 @@ public class AdvancedLettuceClientService {
                 future = async.set(key, value).toCompletableFuture();
             }
 
-            return future.thenApply("OK"::equals)
-                    .whenComplete((success, throwable) -> {
-                        if (throwable != null) {
-                            log.error("[Pure-Lettuce] SET failed for key: {}", key, throwable);
-                        } else {
-                            log.debug("[Pure-Lettuce] SET for key '{}' completed: {}", key, success);
-                        }
-                    });
+            return future.thenApply("OK"::equals).whenComplete((success, throwable) -> {
+                if (throwable != null) {
+                    log.error("[Pure-Lettuce] SET failed for key: {}", key, throwable);
+                } else {
+                    log.debug("[Pure-Lettuce] SET for key '{}' completed: {}", key, success);
+                }
+            });
         });
     }
 
@@ -297,11 +291,10 @@ public class AdvancedLettuceClientService {
             var connection = redisClient.connect();
 
             // Execute operation and ensure connection is closed afterward
-            return operation.execute(connection.async())
-                    .whenComplete((result, throwable) -> {
-                        // Close connection to return it to pool
-                        connection.closeAsync();
-                    });
+            return operation.execute(connection.async()).whenComplete((result, throwable) -> {
+                // Close connection to return it to pool
+                connection.closeAsync();
+            });
 
         } catch (Exception e) {
             log.error("[Pure-Lettuce] Failed to execute async operation", e);

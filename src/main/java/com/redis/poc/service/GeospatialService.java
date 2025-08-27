@@ -1,13 +1,12 @@
 package com.redis.poc.service;
 
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.data.geo.*;
 import org.springframework.data.redis.connection.RedisGeoCommands;
 import org.springframework.data.redis.core.GeoOperations;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
-
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Service for handling geospatial data using Redis.

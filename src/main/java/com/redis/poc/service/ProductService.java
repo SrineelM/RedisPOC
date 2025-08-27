@@ -2,12 +2,11 @@ package com.redis.poc.service;
 
 import com.redis.poc.domain.Product;
 import com.redis.poc.repository.ProductRepository;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 /**
  * Service layer for managing products. This class demonstrates the use of
@@ -73,7 +72,9 @@ public class ProductService {
      * @param product The product to save.
      * @return The saved product.
      */
-    @CacheEvict(value = {"products", "product-details"}, allEntries = true)
+    @CacheEvict(
+            value = {"products", "product-details"},
+            allEntries = true)
     public Product saveProduct(Product product) {
         log.info("Saving product with id {}. Caches will be evicted.", product.getId());
         return productRepository.save(product);
@@ -88,7 +89,9 @@ public class ProductService {
      *
      * @param id The ID of the product to delete.
      */
-    @CacheEvict(value = {"products", "product-details"}, allEntries = true)
+    @CacheEvict(
+            value = {"products", "product-details"},
+            allEntries = true)
     public void deleteProduct(String id) {
         log.info("Deleting product with id {}. Caches will be evicted.", id);
         productRepository.deleteById(id);

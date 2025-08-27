@@ -6,10 +6,6 @@ import io.lettuce.core.RedisFuture;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.micrometer.core.annotation.Timed;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.stereotype.Service;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +13,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Service;
 
 /**
  * Service for executing Redis commands in batches to optimize performance.
@@ -42,10 +41,11 @@ public class BatchRedisOperationsService {
      * @param auditLogger A custom service for logging audit and performance events.
      * @param redisAsyncExecutor A dedicated thread pool for async operations.
      */
-    public BatchRedisOperationsService(StatefulRedisConnection<String, String> connection,
-                                       RedisTemplate<String, Object> redisTemplate,
-                                       AuditLogger auditLogger,
-                                       Executor redisAsyncExecutor) {
+    public BatchRedisOperationsService(
+            StatefulRedisConnection<String, String> connection,
+            RedisTemplate<String, Object> redisTemplate,
+            AuditLogger auditLogger,
+            Executor redisAsyncExecutor) {
         this.connection = connection;
         this.redisTemplate = redisTemplate;
         this.auditLogger = auditLogger;
@@ -68,48 +68,48 @@ public class BatchRedisOperationsService {
         }
 
         // Run the entire operation asynchronously on a dedicated executor.
-        return CompletableFuture.supplyAsync(() -> {
-            long startTime = System.currentTimeMillis();
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    long startTime = System.currentTimeMillis();
 
-            try {
-                RedisAsyncCommands<String, String> async = connection.async();
+                    try {
+                        RedisAsyncCommands<String, String> async = connection.async();
 
-                // Create futures for all GET operations
-                Map<String, RedisFuture<String>> futures = keys.stream()
-                        .collect(Collectors.toMap(
-                                key -> key,
-                                async::get
-                        ));
+                        // Create futures for all GET operations
+                        Map<String, RedisFuture<String>> futures =
+                                keys.stream().collect(Collectors.toMap(key -> key, async::get));
 
-                // Now, wait for all futures to complete and collect the results.
-                Map<String, String> results = futures.entrySet().stream()
-                        .collect(Collectors.toMap(
-                                Map.Entry::getKey,
-                                entry -> {
+                        // Now, wait for all futures to complete and collect the results.
+                        Map<String, String> results = futures.entrySet().stream()
+                                .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
                                     try {
                                         return entry.getValue().get(5, TimeUnit.SECONDS);
                                     } catch (Exception e) {
                                         log.error("Failed to get value for key: {}", entry.getKey(), e);
                                         return null;
                                     }
-                                }
-                        ));
+                                }));
 
-                long duration = System.currentTimeMillis() - startTime;
-                auditLogger.logPerformanceEvent("BATCH_GET", duration, true);
-                auditLogger.logOperation(username, "BATCH_GET", "keys:" + keys.size(), true,
-                        "Retrieved " + results.size() + " values");
+                        long duration = System.currentTimeMillis() - startTime;
+                        auditLogger.logPerformanceEvent("BATCH_GET", duration, true);
+                        auditLogger.logOperation(
+                                username,
+                                "BATCH_GET",
+                                "keys:" + keys.size(),
+                                true,
+                                "Retrieved " + results.size() + " values");
 
-                return results;
+                        return results;
 
-            } catch (Exception e) {
-                long duration = System.currentTimeMillis() - startTime;
-                auditLogger.logPerformanceEvent("BATCH_GET", duration, false);
-                auditLogger.logOperation(username, "BATCH_GET", "keys:" + keys.size(), false, e.getMessage());
-                log.error("Batch GET operation failed", e);
-                throw new RuntimeException("Batch GET operation failed", e);
-            }
-        }, redisAsyncExecutor);
+                    } catch (Exception e) {
+                        long duration = System.currentTimeMillis() - startTime;
+                        auditLogger.logPerformanceEvent("BATCH_GET", duration, false);
+                        auditLogger.logOperation(username, "BATCH_GET", "keys:" + keys.size(), false, e.getMessage());
+                        log.error("Batch GET operation failed", e);
+                        throw new RuntimeException("Batch GET operation failed", e);
+                    }
+                },
+                redisAsyncExecutor);
     }
 
     /**
@@ -122,33 +122,32 @@ public class BatchRedisOperationsService {
      */
     @Retry(name = "redis-resilience")
     @Timed(value = "redis.batch.set", description = "Time taken for batch SET operations")
-    public CompletableFuture<Boolean> setBatchValues(Map<String, String> keyValues,
-                                                     Duration ttl, String username) {
+    public CompletableFuture<Boolean> setBatchValues(Map<String, String> keyValues, Duration ttl, String username) {
         // Return early if there's nothing to do.
         if (keyValues == null || keyValues.isEmpty()) {
             return CompletableFuture.completedFuture(true);
         }
 
-        return CompletableFuture.supplyAsync(() -> {
-            long startTime = System.currentTimeMillis();
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    long startTime = System.currentTimeMillis();
 
-            try {
-                RedisAsyncCommands<String, String> async = connection.async();
+                    try {
+                        RedisAsyncCommands<String, String> async = connection.async();
 
-                // Fire off all SET commands. Use SETEX if a TTL is provided.
-                List<RedisFuture<String>> futures = keyValues.entrySet().stream()
-                        .map(entry -> {
-                            if (ttl != null) {
-                                return async.setex(entry.getKey(), ttl.getSeconds(), entry.getValue());
-                            } else {
-                                return async.set(entry.getKey(), entry.getValue());
-                            }
-                        })
-                        .collect(Collectors.toList());
+                        // Fire off all SET commands. Use SETEX if a TTL is provided.
+                        List<RedisFuture<String>> futures = keyValues.entrySet().stream()
+                                .map(entry -> {
+                                    if (ttl != null) {
+                                        return async.setex(entry.getKey(), ttl.getSeconds(), entry.getValue());
+                                    } else {
+                                        return async.set(entry.getKey(), entry.getValue());
+                                    }
+                                })
+                                .collect(Collectors.toList());
 
-                // Wait for all operations to complete and verify they all returned "OK".
-                boolean allSuccessful = futures.stream()
-                        .allMatch(future -> {
+                        // Wait for all operations to complete and verify they all returned "OK".
+                        boolean allSuccessful = futures.stream().allMatch(future -> {
                             try {
                                 String result = future.get(5, TimeUnit.SECONDS);
                                 return "OK".equals(result);
@@ -158,21 +157,27 @@ public class BatchRedisOperationsService {
                             }
                         });
 
-                long duration = System.currentTimeMillis() - startTime;
-                auditLogger.logPerformanceEvent("BATCH_SET", duration, allSuccessful);
-                auditLogger.logOperation(username, "BATCH_SET", "keys:" + keyValues.size(), allSuccessful,
-                        "Set " + keyValues.size() + " values with TTL: " + ttl);
+                        long duration = System.currentTimeMillis() - startTime;
+                        auditLogger.logPerformanceEvent("BATCH_SET", duration, allSuccessful);
+                        auditLogger.logOperation(
+                                username,
+                                "BATCH_SET",
+                                "keys:" + keyValues.size(),
+                                allSuccessful,
+                                "Set " + keyValues.size() + " values with TTL: " + ttl);
 
-                return allSuccessful;
+                        return allSuccessful;
 
-            } catch (Exception e) {
-                long duration = System.currentTimeMillis() - startTime;
-                auditLogger.logPerformanceEvent("BATCH_SET", duration, false);
-                auditLogger.logOperation(username, "BATCH_SET", "keys:" + keyValues.size(), false, e.getMessage());
-                log.error("Batch SET operation failed", e);
-                throw new RuntimeException("Batch SET operation failed", e);
-            }
-        }, redisAsyncExecutor);
+                    } catch (Exception e) {
+                        long duration = System.currentTimeMillis() - startTime;
+                        auditLogger.logPerformanceEvent("BATCH_SET", duration, false);
+                        auditLogger.logOperation(
+                                username, "BATCH_SET", "keys:" + keyValues.size(), false, e.getMessage());
+                        log.error("Batch SET operation failed", e);
+                        throw new RuntimeException("Batch SET operation failed", e);
+                    }
+                },
+                redisAsyncExecutor);
     }
 
     /**
@@ -186,55 +191,73 @@ public class BatchRedisOperationsService {
     @Retry(name = "redis-resilience")
     @Timed(value = "redis.transaction", description = "Time taken for Redis transactions")
     public CompletableFuture<Boolean> executeTransaction(List<RedisOperation> operations, String username) {
-        return CompletableFuture.supplyAsync(() -> {
-            long startTime = System.currentTimeMillis();
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    long startTime = System.currentTimeMillis();
 
-            try {
-                // Use RedisTemplate's execute callback, the standard Spring way to handle transactions.
-                List<Object> results = redisTemplate.execute((org.springframework.data.redis.core.RedisCallback<List<Object>>) connection -> {
-                    connection.multi();
+                    try {
+                        // Use RedisTemplate's execute callback, the standard Spring way to handle transactions.
+                        List<Object> results = redisTemplate.execute(
+                                (org.springframework.data.redis.core.RedisCallback<List<Object>>) connection -> {
+                                    connection.multi();
 
-                    for (RedisOperation operation : operations) {
-                        switch (operation.getType()) {
-                            case SET:
-                                connection.stringCommands().set(
-                                        operation.getKey().getBytes(),
-                                        operation.getValue().getBytes()
-                                );
-                                break;
-                            case DELETE:
-                                connection.keyCommands().del(operation.getKey().getBytes());
-                                break;
-                            case EXPIRE:
-                                connection.keyCommands().expire(
-                                        operation.getKey().getBytes(),
-                                        operation.getTtlSeconds()
-                                );
-                                break;
-                        }
+                                    for (RedisOperation operation : operations) {
+                                        switch (operation.getType()) {
+                                            case SET:
+                                                connection
+                                                        .stringCommands()
+                                                        .set(
+                                                                operation
+                                                                        .getKey()
+                                                                        .getBytes(),
+                                                                operation
+                                                                        .getValue()
+                                                                        .getBytes());
+                                                break;
+                                            case DELETE:
+                                                connection
+                                                        .keyCommands()
+                                                        .del(operation.getKey().getBytes());
+                                                break;
+                                            case EXPIRE:
+                                                connection
+                                                        .keyCommands()
+                                                        .expire(
+                                                                operation
+                                                                        .getKey()
+                                                                        .getBytes(),
+                                                                operation.getTtlSeconds());
+                                                break;
+                                        }
+                                    }
+
+                                    return connection.exec();
+                                });
+
+                        // EXEC returns null if the transaction was aborted (e.g., by WATCH).
+                        boolean success = results != null && !results.isEmpty();
+                        long duration = System.currentTimeMillis() - startTime;
+
+                        auditLogger.logPerformanceEvent("TRANSACTION", duration, success);
+                        auditLogger.logOperation(
+                                username,
+                                "TRANSACTION",
+                                "ops:" + operations.size(),
+                                success,
+                                "Executed " + operations.size() + " operations");
+
+                        return success;
+
+                    } catch (Exception e) {
+                        long duration = System.currentTimeMillis() - startTime;
+                        auditLogger.logPerformanceEvent("TRANSACTION", duration, false);
+                        auditLogger.logOperation(
+                                username, "TRANSACTION", "ops:" + operations.size(), false, e.getMessage());
+                        log.error("Transaction failed", e);
+                        throw new RuntimeException("Transaction failed", e);
                     }
-
-                    return connection.exec();
-                });
-
-                // EXEC returns null if the transaction was aborted (e.g., by WATCH).
-                boolean success = results != null && !results.isEmpty();
-                long duration = System.currentTimeMillis() - startTime;
-
-                auditLogger.logPerformanceEvent("TRANSACTION", duration, success);
-                auditLogger.logOperation(username, "TRANSACTION", "ops:" + operations.size(), success,
-                        "Executed " + operations.size() + " operations");
-
-                return success;
-
-            } catch (Exception e) {
-                long duration = System.currentTimeMillis() - startTime;
-                auditLogger.logPerformanceEvent("TRANSACTION", duration, false);
-                auditLogger.logOperation(username, "TRANSACTION", "ops:" + operations.size(), false, e.getMessage());
-                log.error("Transaction failed", e);
-                throw new RuntimeException("Transaction failed", e);
-            }
-        }, redisAsyncExecutor);
+                },
+                redisAsyncExecutor);
     }
 
     /**
@@ -242,7 +265,11 @@ public class BatchRedisOperationsService {
      * This makes the `executeTransaction` method's signature clean and type-safe.
      */
     public static class RedisOperation {
-        public enum Type { SET, DELETE, EXPIRE }
+        public enum Type {
+            SET,
+            DELETE,
+            EXPIRE
+        }
 
         private final Type type;
         private final String key;
@@ -265,12 +292,21 @@ public class BatchRedisOperationsService {
             this.ttlSeconds = 0;
         }
 
-
-
         // Getters
-        public Type getType() { return type; }
-        public String getKey() { return key; }
-        public String getValue() { return value; }
-        public long getTtlSeconds() { return ttlSeconds; }
+        public Type getType() {
+            return type;
+        }
+
+        public String getKey() {
+            return key;
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        public long getTtlSeconds() {
+            return ttlSeconds;
+        }
     }
 }

@@ -7,6 +7,12 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.function.Function;
+import javax.crypto.SecretKey;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.lang.NonNull;
@@ -16,13 +22,6 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-
-import javax.crypto.SecretKey;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.function.Function;
 
 /**
  * A Spring Security filter that intercepts incoming requests to validate JWTs.
@@ -60,9 +59,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * checks for revocation, and sets the authentication in the security context.
      */
     @Override
-    protected void doFilterInternal(@NonNull HttpServletRequest request,
-                                  @NonNull HttpServletResponse response,
-                                  @NonNull FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain)
+            throws ServletException, IOException {
 
         final String authHeader = request.getHeader("Authorization");
 
@@ -89,8 +90,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // ...validate the token's signature, expiration, and claims.
                 if (validateToken(jwt, username)) {
                     // Audit log for successful authentication.
-                    log.info("Successful JWT authentication for user: {} from IP: {}",
-                            username, getClientIpAddress(request));
+                    log.info(
+                            "Successful JWT authentication for user: {} from IP: {}",
+                            username,
+                            getClientIpAddress(request));
 
                     // Create UserDetails object for Spring Security.
                     UserDetails userDetails = User.builder()
@@ -109,8 +112,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         } catch (Exception e) {
             // Audit log for any failed authentication attempt.
-            log.warn("JWT authentication failed from IP: {} - Error: {}",
-                    getClientIpAddress(request), e.getMessage());
+            log.warn("JWT authentication failed from IP: {} - Error: {}", getClientIpAddress(request), e.getMessage());
         }
 
         // Continue the filter chain.
@@ -150,7 +152,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // --- Claims Validation ---
         final boolean isIssuerValid = expectedIssuer.equals(claims.getIssuer());
-        final boolean isAudienceValid = claims.getAudience() != null && claims.getAudience().contains(expectedAudience);
+        final boolean isAudienceValid =
+                claims.getAudience() != null && claims.getAudience().contains(expectedAudience);
 
         if (!isIssuerValid || !isAudienceValid) {
             log.warn("JWT claim validation failed. IssuerValid={}, AudienceValid={}", isIssuerValid, isAudienceValid);

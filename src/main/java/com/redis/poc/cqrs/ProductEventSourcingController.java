@@ -1,10 +1,9 @@
 package com.redis.poc.cqrs;
 
 import com.redis.poc.domain.Product;
+import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST controller for handling product operations via event sourcing.

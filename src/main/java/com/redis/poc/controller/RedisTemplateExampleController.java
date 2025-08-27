@@ -1,10 +1,9 @@
 package com.redis.poc.controller;
 
 import com.redis.poc.service.RedisTemplateExampleService;
+import java.time.Duration;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.time.Duration;
 
 /**
  * A REST controller demonstrating basic Redis operations via RedisTemplate.

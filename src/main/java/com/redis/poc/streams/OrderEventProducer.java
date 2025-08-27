@@ -1,12 +1,12 @@
 package com.redis.poc.streams;
 
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.connection.stream.MapRecord;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import java.util.Map;
+import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 /**
@@ -19,6 +19,7 @@ public class OrderEventProducer {
     private final RedisTemplate<String, Object> redisTemplate;
     private final StringRedisTemplate stringRedisTemplate;
     private static final String STREAM_KEY = "orders";
+
     @Value("${redis.stream.orders.max-length:1000}")
     private long maxLength;
 
@@ -41,11 +42,12 @@ public class OrderEventProducer {
      */
     public RecordId publishOrderEvent(OrderEvent event) {
         log.info("Publishing order event: {}", event);
-        MapRecord<String, Object, Object> record = MapRecord.create(STREAM_KEY, Map.of(
-                "id", event.id(),
-                "customer", event.customer(),
-                "amount", event.amount()
-        ));
+        MapRecord<String, Object, Object> record = MapRecord.create(
+                STREAM_KEY,
+                Map.of(
+                        "id", event.id(),
+                        "customer", event.customer(),
+                        "amount", event.amount()));
         // Append event to the stream
         RecordId id = redisTemplate.opsForStream().add(record);
         // Store the last generated ID for lag calculation

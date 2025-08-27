@@ -2,10 +2,9 @@ package com.redis.poc.controller;
 
 import com.redis.poc.pubsub.RedisMessagePublisher;
 import com.redis.poc.pubsub.RedisMessageSubscriber;
+import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST controller to demonstrate Redis Publish/Subscribe functionality.

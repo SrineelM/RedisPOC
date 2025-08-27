@@ -3,11 +3,10 @@ package com.redis.poc.controller;
 import com.redis.poc.domain.Product;
 import com.redis.poc.domain.ProductDto;
 import com.redis.poc.service.ProductService;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * Standard REST controller for handling CRUD (Create, Read, Update, Delete) operations for Products.
@@ -45,9 +44,7 @@ public class ProductController {
      */
     @GetMapping
     public List<ProductDto> getAllProducts() {
-        return productService.getAllProducts().stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        return productService.getAllProducts().stream().map(this::toDto).collect(Collectors.toList());
     }
 
     /**
