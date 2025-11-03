@@ -1,5 +1,7 @@
 package com.redis.poc.config;
 
+import java.util.HashMap;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -16,9 +18,6 @@ import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
-
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Kafka Configuration for Event-Driven Architecture in Higher Environments.
@@ -120,29 +119,29 @@ public class KafkaConfig {
     @Bean
     public ProducerFactory<String, Object> producerFactory() {
         Map<String, Object> config = new HashMap<>();
-        
+
         // Bootstrap servers (Kafka cluster)
         config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        
+
         // Serializers (convert Java objects to bytes for Kafka)
         config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
-        
+
         // Reliability settings (ensure messages are not lost)
         config.put(ProducerConfig.ACKS_CONFIG, "all"); // Wait for all replicas (strongest guarantee)
         config.put(ProducerConfig.RETRIES_CONFIG, 3); // Retry failed sends
         config.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true); // Prevent duplicates
-        
+
         // Performance settings (balance throughput vs latency)
         config.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "snappy"); // Compress messages
         config.put(ProducerConfig.BATCH_SIZE_CONFIG, 16384); // Batch size in bytes
         config.put(ProducerConfig.LINGER_MS_CONFIG, 10); // Wait 10ms to batch more messages
         config.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 33554432); // 32MB buffer
-        
+
         // Timeout settings
         config.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5000); // Max time to block on send()
         config.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 30000); // 30 seconds
-        
+
         log.info("Kafka Producer configured: servers={}, acks=all, compression=snappy", bootstrapServers);
         return new DefaultKafkaProducerFactory<>(config);
     }
@@ -174,29 +173,32 @@ public class KafkaConfig {
     @Bean
     public ConsumerFactory<String, Object> consumerFactory() {
         Map<String, Object> config = new HashMap<>();
-        
+
         // Bootstrap servers
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        
+
         // Consumer group (enables load balancing across multiple consumers)
         config.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId);
-        
+
         // Deserializers (convert bytes from Kafka back to Java objects)
         config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
         config.put(JsonDeserializer.TRUSTED_PACKAGES, "com.redis.poc.*"); // Security: only trust our packages
-        
+
         // Offset management (where to start consuming)
         config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"); // Start from beginning
         config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false); // Manual commit for reliability
-        
+
         // Performance settings
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100); // Batch size
         config.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 300000); // 5 minutes
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000); // 30 seconds
         config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 10000); // 10 seconds
-        
-        log.info("Kafka Consumer configured: servers={}, group={}, auto-commit=false", bootstrapServers, consumerGroupId);
+
+        log.info(
+                "Kafka Consumer configured: servers={}, group={}, auto-commit=false",
+                bootstrapServers,
+                consumerGroupId);
         return new DefaultKafkaConsumerFactory<>(config);
     }
 
@@ -206,12 +208,12 @@ public class KafkaConfig {
      */
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, Object> factory = 
-            new ConcurrentKafkaListenerContainerFactory<>();
+        ConcurrentKafkaListenerContainerFactory<String, Object> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
         factory.setConcurrency(3); // 3 consumer threads for parallel processing
         factory.getContainerProperties().setPollTimeout(3000); // 3 seconds poll timeout
-        
+
         log.info("Kafka Listener Container Factory configured: concurrency=3");
         return factory;
     }

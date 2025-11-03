@@ -1,15 +1,13 @@
 package com.redis.poc.service;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.stereotype.Service;
-
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.stereotype.Service;
 
 /**
  * Thread-Safe Distributed Cache Synchronization Service with Redis Pub/Sub.
@@ -109,11 +107,8 @@ public class CacheSyncService {
 
         // Initialize CAS (Compare-And-Set) script for optimistic locking
         this.casScript = new DefaultRedisScript<>();
-        this.casScript.setScriptText(
-                "if redis.call('get', KEYS[1]) == ARGV[1] then " +
-                        "return redis.call('set', KEYS[1], ARGV[2]) " +
-                        "else return false end"
-        );
+        this.casScript.setScriptText("if redis.call('get', KEYS[1]) == ARGV[1] then "
+                + "return redis.call('set', KEYS[1], ARGV[2]) " + "else return false end");
         this.casScript.setResultType(Boolean.class);
     }
 
@@ -207,39 +202,50 @@ public class CacheSyncService {
         int attempt = 0;
 
         while (attempt < maxRetries) {
+            attempt++;
             try {
-                // Execute optimistic locking transaction
-                Boolean success = redisTemplate.execute((connection) -> {
-                    // WATCH: Monitor key for changes
-                    connection.watch(key.getBytes());
+                // Use Lua script for atomic optimistic locking
+                // Script: Check if key exists and hasn't changed, then update
+                String luaScript =
+                        "if redis.call('EXISTS', KEYS[1]) == 0 or " + "redis.call('GET', KEYS[1]) == ARGV[1] then "
+                                + "redis.call('SET', KEYS[1], ARGV[2]); "
+                                + "return 1; "
+                                + "else "
+                                + "return 0; "
+                                + "end";
 
-                    // Read current value (if exists)
-                    Object currentValue = redisTemplate.opsForValue().get(key);
+                DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+                script.setScriptText(luaScript);
+                script.setResultType(Long.class);
 
-                    // MULTI: Start transaction
-                    connection.multi();
+                // Get current value for comparison
+                Object currentValue = redisTemplate.opsForValue().get(key);
 
-                    // Queue SET command
-                    redisTemplate.opsForValue().set(key, value);
+                Long result = redisTemplate.execute(
+                        script,
+                        Collections.singletonList(key),
+                        currentValue != null ? currentValue.toString() : "",
+                        value.toString());
 
-                    // EXEC: Execute transaction (fails if key was modified)
-                    List<Object> results = connection.exec();
-
-                    // If EXEC returned null, it means concurrent modification was detected
-                    return results != null && !results.isEmpty();
-                });
-
-                if (Boolean.TRUE.equals(success)) {
-                    log.info("Optimistic lock UPDATE succeeded: key={}, attempt={}", key, attempt + 1);
+                if (result != null && result > 0) {
+                    log.info("Optimistic lock UPDATE succeeded: key={}, attempt={}", key, attempt);
                     return true;
                 } else {
-                    log.warn("Optimistic lock CONFLICT: key={}, attempt={}, retrying...", key, attempt + 1);
-                    attempt++;
-                    Thread.sleep(10); // Brief backoff before retry
+                    log.warn("Optimistic lock CONFLICT: key={}, attempt={}, retrying...", key, attempt);
+                    if (attempt < maxRetries) {
+                        Thread.sleep(10L * attempt); // Exponential backoff
+                    }
                 }
             } catch (Exception e) {
-                log.error("Optimistic lock ERROR: key={}, attempt={}: {}", key, attempt + 1, e.getMessage());
-                attempt++;
+                log.error("Optimistic lock ERROR: key={}, attempt={}: {}", key, attempt, e.getMessage());
+                if (attempt < maxRetries) {
+                    try {
+                        Thread.sleep(10L * attempt);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return false;
+                    }
+                }
             }
         }
 
@@ -282,12 +288,7 @@ public class CacheSyncService {
      */
     public boolean compareAndSet(String key, Object expectedValue, Object newValue) {
         try {
-            Boolean success = redisTemplate.execute(
-                    casScript,
-                    Collections.singletonList(key),
-                    expectedValue,
-                    newValue
-            );
+            Boolean success = redisTemplate.execute(casScript, Collections.singletonList(key), expectedValue, newValue);
 
             if (Boolean.TRUE.equals(success)) {
                 log.info("CAS SUCCESS: key={}, expected={}, new={}", key, expectedValue, newValue);
@@ -368,9 +369,8 @@ public class CacheSyncService {
     public boolean checkRedisHealth() {
         try {
             // PING command: Returns "PONG" if Redis is alive
-            String response = redisTemplate.getConnectionFactory()
-                    .getConnection()
-                    .ping();
+            String response =
+                    redisTemplate.getConnectionFactory().getConnection().ping();
 
             boolean healthy = "PONG".equals(response);
             log.info("Redis health check: {}", healthy ? "HEALTHY" : "UNHEALTHY");

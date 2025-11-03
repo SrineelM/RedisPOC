@@ -3,15 +3,14 @@ package com.redis.poc.service;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.stats.CacheStats;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.stereotype.Service;
-
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Service;
 
 /**
  * Hybrid L1/L2 Caching Service using Caffeine (off-heap) + Redis (distributed).
@@ -156,13 +155,13 @@ public class HybridCacheService {
         this.l1Cache = Caffeine.newBuilder()
                 // Size-based eviction (prevent unbounded growth)
                 .maximumSize(10_000) // Max 10K entries (~50MB for typical objects)
-                
+
                 // Time-based expiration (prevent stale data)
                 .expireAfterWrite(5, TimeUnit.MINUTES) // Shorter TTL than L2
-                
+
                 // Statistics (for monitoring hit ratio)
                 .recordStats() // Enable hit/miss tracking
-                
+
                 // Build the cache
                 .build();
 
@@ -419,8 +418,7 @@ public class HybridCacheService {
 
         @Override
         public synchronized String toString() {
-            return String.format("Hits: %d, Misses: %d, Hit Ratio: %.2f%%", 
-                    hits, misses, getHitRatio() * 100);
+            return String.format("Hits: %d, Misses: %d, Hit Ratio: %.2f%%", hits, misses, getHitRatio() * 100);
         }
     }
 }

@@ -130,8 +130,7 @@ public class EmbeddedRedisConfig {
 
             // Rethrow to prevent application startup with non-functional Redis
             // This is intentional: fail-fast is better than silently failing
-            throw new IllegalStateException(
-                    "Embedded Redis failed to start. See logs above for solutions.", e);
+            throw new IllegalStateException("Embedded Redis failed to start. See logs above for solutions.", e);
         }
     }
 
