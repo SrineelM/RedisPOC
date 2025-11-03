@@ -1,0 +1,546 @@
+{
+	"info": {
+		"_postman_id": "redis-poc-2025",
+		"name": "Redis POC - Comprehensive API Testing",
+		"description": "Complete Postman collection for testing all Redis patterns:\n- Caching (L1/L2 Hybrid)\n- Pub/Sub Messaging\n- Streams & DLQ\n- Distributed Locks\n- Rate Limiting\n- Geospatial Queries\n- Leaderboards\n- CQRS & Event Sourcing\n- Security (JWT)\n\nEnvironment Variables Required:\n- base_url: http://localhost:8080\n- jwt_token: (auto-set after login)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Authentication",
+			"item": [
+				{
+					"name": "Login & Get JWT",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Extract and save JWT token",
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"jwt_token\", jsonData.token);",
+									"    pm.test(\"JWT token received\", function() {",
+									"        pm.expect(jsonData.token).to.not.be.empty;",
+									"    });",
+									"} else {",
+									"    pm.test(\"Login failed\", function() {",
+									"        pm.expect.fail(\"Expected 200 status\");",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"testuser\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "login"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Product CRUD (Basic Caching)",
+			"item": [
+				{
+					"name": "Create Product",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Product created\", function() {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"product_id\", jsonData.id);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"id\": \"prod-{{$randomInt}}\",\n  \"name\": \"Test Product {{$randomInt}}\",\n  \"description\": \"High-quality test product\",\n  \"price\": 99.99\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/products",
+							"host": ["{{base_url}}"],
+							"path": ["api", "products"]
+						}
+					}
+				},
+				{
+					"name": "Get Product (Cache MISS)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Response time < 3000ms (first request - DB fetch)\", function() {",
+									"    pm.expect(pm.response.responseTime).to.be.below(3000);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/products/{{product_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "products", "{{product_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Product (Cache HIT)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Response time < 100ms (cached)\", function() {",
+									"    pm.expect(pm.response.responseTime).to.be.below(100);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/products/{{product_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "products", "{{product_id}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Hybrid Cache (L1/L2)",
+			"item": [
+				{
+					"name": "Get from Hybrid Cache",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/cache/hybrid/get?key=test-key",
+							"host": ["{{base_url}}"],
+							"path": ["api", "cache", "hybrid", "get"],
+							"query": [
+								{
+									"key": "key",
+									"value": "test-key"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Put to Hybrid Cache",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"test-key\",\n  \"value\": \"test-value-{{$timestamp}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cache/hybrid/put",
+							"host": ["{{base_url}}"],
+							"path": ["api", "cache", "hybrid", "put"]
+						}
+					}
+				},
+				{
+					"name": "Get Cache Statistics",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/cache/hybrid/stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "cache", "hybrid", "stats"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Distributed Locks",
+			"item": [
+				{
+					"name": "Acquire Lock",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"lock_token\", jsonData.token);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"lockKey\": \"resource:{{$randomInt}}\",\n  \"ttl\": 30\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/lock/acquire",
+							"host": ["{{base_url}}"],
+							"path": ["api", "lock", "acquire"]
+						}
+					}
+				},
+				{
+					"name": "Release Lock",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"lockKey\": \"resource:{{$randomInt}}\",\n  \"token\": \"{{lock_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/lock/release",
+							"host": ["{{base_url}}"],
+							"path": ["api", "lock", "release"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Rate Limiting",
+			"item": [
+				{
+					"name": "Test Rate Limit (Repeat 20 times)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 429) {",
+									"    pm.test(\"Rate limit enforced\", function() {",
+									"        pm.response.to.have.status(429);",
+									"    });",
+									"} else {",
+									"    pm.test(\"Request allowed\", function() {",
+									"        pm.response.to.have.status(200);",
+									"    });",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/ratelimit/test",
+							"host": ["{{base_url}}"],
+							"path": ["api", "ratelimit", "test"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Geospatial",
+			"item": [
+				{
+					"name": "Add Location",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Store-{{$randomInt}}\",\n  \"longitude\": -74.0060,\n  \"latitude\": 40.7128\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/geo/add",
+							"host": ["{{base_url}}"],
+							"path": ["api", "geo", "add"]
+						}
+					}
+				},
+				{
+					"name": "Find Nearby Locations",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/geo/nearby?longitude=-74.0060&latitude=40.7128&radius=10&unit=km",
+							"host": ["{{base_url}}"],
+							"path": ["api", "geo", "nearby"],
+							"query": [
+								{
+									"key": "longitude",
+									"value": "-74.0060"
+								},
+								{
+									"key": "latitude",
+									"value": "40.7128"
+								},
+								{
+									"key": "radius",
+									"value": "10"
+								},
+								{
+									"key": "unit",
+									"value": "km"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "7. Leaderboard",
+			"item": [
+				{
+					"name": "Update User Score",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"user-{{$randomInt}}\",\n  \"score\": {{$randomInt}}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/leaderboard/add",
+							"host": ["{{base_url}}"],
+							"path": ["api", "leaderboard", "add"]
+						}
+					}
+				},
+				{
+					"name": "Get Top 10 Users",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/leaderboard/top?count=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "leaderboard", "top"],
+							"query": [
+								{
+									"key": "count",
+									"value": "10"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "8. Pub/Sub Messaging",
+			"item": [
+				{
+					"name": "Publish Message",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"channel\": \"news\",\n  \"message\": \"Breaking news at {{$timestamp}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/pubsub/publish",
+							"host": ["{{base_url}}"],
+							"path": ["api", "pubsub", "publish"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "9. Redis Streams",
+			"item": [
+				{
+					"name": "Publish Order Event",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"orderId\": \"order-{{$randomInt}}\",\n  \"amount\": {{$randomInt}},\n  \"status\": \"PENDING\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/stream/publish",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "publish"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "10. Advanced Lettuce (Resilience)",
+			"item": [
+				{
+					"name": "Circuit Breaker Test",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/advanced-lettuce/circuit-breaker?key=test-key",
+							"host": ["{{base_url}}"],
+							"path": ["api", "advanced-lettuce", "circuit-breaker"],
+							"query": [
+								{
+									"key": "key",
+									"value": "test-key"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Bulkhead Test",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/advanced-lettuce/bulkhead?key=test-key",
+							"host": ["{{base_url}}"],
+							"path": ["api", "advanced-lettuce", "bulkhead"],
+							"query": [
+								{
+									"key": "key",
+									"value": "test-key"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "11. Health & Metrics",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/actuator/health",
+							"host": ["{{base_url}}"],
+							"path": ["actuator", "health"]
+						}
+					}
+				},
+				{
+					"name": "Prometheus Metrics",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/actuator/prometheus",
+							"host": ["{{base_url}}"],
+							"path": ["actuator", "prometheus"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{jwt_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global pre-request script",
+					"console.log('Executing request to: ' + pm.request.url);"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global test script",
+					"pm.test(\"Response time < 5000ms\", function() {",
+					"    pm.expect(pm.response.responseTime).to.be.below(5000);",
+					"});",
+					"",
+					"pm.test(\"Status code is successful\", function() {",
+					"    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+					"});"
+				]
+			}
+		}
+	]
+}

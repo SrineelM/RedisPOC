@@ -1,10 +1,101 @@
-# Redis POC: A Java-Based Showcase of Redis Capabilities
+# Redis POC: Enterprise-Grade Redis Patterns with Spring Boot
 
-This project is a comprehensive Proof-of-Concept (POC) application built with Spring Boot, Java 17, and Gradle. It demonstrates various powerful, production-grade features of Redis, including robust caching, decoupled pub/sub, reliable streams, safe distributed locks, and efficient rate limiting.
+A comprehensive, production-ready showcase of Redis capabilities built with **Spring Boot 3.2.2**, **Java 17**, and **Gradle**. This project demonstrates advanced Redis patterns including caching, pub/sub messaging, distributed coordination, event sourcing, and high-performance operations with a focus on **resilience**, **scalability**, and **observability**.
 
-It also includes a special section on advanced, client-side resilience patterns using the Lettuce client directly with Resilience4j, and a simple example of using `RedisTemplate` for comparison.
+## 🎯 Project Goals
 
-## Architectural Comparison: RedisTemplate vs. Direct Lettuce Client
+- **Beginner-Friendly**: Clear examples and extensive documentation for developers new to Redis
+- **Production-Ready**: Enterprise patterns including circuit breakers, distributed locks, and fault tolerance
+- **Performance-Optimized**: Hybrid caching (L1/L2), batch operations, and async processing
+- **Highly Observable**: Metrics, tracing, health checks, and comprehensive logging
+- **Laptop-Friendly**: Local profile optimized for 8GB RAM development machines
+- **Cloud-Ready**: Production configurations for distributed deployments
+
+This project serves as both a **learning resource** and a **reference architecture** for building scalable Redis-based applications.
+
+## 📋 Table of Contents
+
+- [Key Features](#-key-features)
+- [Architecture Overview](#-architecture-overview)
+- [RedisTemplate vs Direct Lettuce](#-redistemplate-vs-direct-lettuce)
+- [Quick Start](#-quick-start)
+- [Environment Profiles](#-environment-profiles)
+- [Features Implemented](#-features-implemented)
+- [Hybrid Caching Strategy](#-hybrid-caching-strategy)
+- [Testing](#-testing)
+- [Performance Tuning](#-performance-tuning)
+- [Deployment Guide](#-deployment-guide)
+- [Troubleshooting](#-troubleshooting)
+
+## 🚀 Key Features
+
+### Core Redis Patterns
+- ✅ **Dual Caching Strategy**: RedisTemplate (Spring integration) + Direct Lettuce (high performance)
+- ✅ **Hybrid L1/L2 Cache**: Caffeine (off-heap) + Redis for optimal performance
+- ✅ **Distributed Coordination**: Redlock algorithm, optimistic locking, distributed cache sync
+- ✅ **Pub/Sub Messaging**: Real-time event distribution with channel-based messaging
+- ✅ **Streams Processing**: Event streaming with consumer groups and DLQ
+- ✅ **CQRS & Event Sourcing**: Command-query separation with event store integration
+
+### Enterprise Capabilities
+- ✅ **Resilience**: Circuit breakers, retry, bulkhead, time limiters (Resilience4j)
+- ✅ **Observability**: Micrometer metrics, Prometheus export, distributed tracing
+- ✅ **Security**: JWT authentication with custom validation annotations
+- ✅ **Thread Safety**: Optimistic locking, CAS operations, distributed locks
+- ✅ **Performance**: Batch operations, async processing, connection pooling
+- ✅ **Health Checks**: Custom Redis health indicators with detailed diagnostics
+
+### Development Experience
+- ✅ **Local Development**: Embedded Redis for zero-setup on 8GB laptops
+- ✅ **Comprehensive Testing**: JUnit 5, Mockito, Testcontainers integration tests
+- ✅ **API Documentation**: Postman collections with test scenarios
+- ✅ **Code Quality**: Spotless formatting, comprehensive JavaDoc
+
+## 🏛️ Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Client Applications                       │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Spring Boot REST API                        │
+│  ┌──────────┐  ┌───────────┐  ┌────────────┐  ┌──────────┐ │
+│  │Controllers│  │  Security │  │ Rate Limit │  │  Health  │ │
+│  └─────┬────┘  └─────┬─────┘  └──────┬─────┘  └────┬─────┘ │
+└────────┼─────────────┼───────────────┼─────────────┼────────┘
+         │             │               │             │
+         ▼             ▼               ▼             ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      Service Layer                            │
+│  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │   Product   │  │ Hybrid Cache │  │  Lock/Sync   │       │
+│  │   Service   │  │   Service    │  │   Service    │       │
+│  └──────┬──────┘  └──────┬───────┘  └──────┬───────┘       │
+│         │                │                  │                │
+│         │     ┌──────────▼──────────┐      │                │
+│         │     │  L1: Caffeine Cache │      │                │
+│         │     │  (Off-heap, <1μs)   │      │                │
+│         │     └──────────┬──────────┘      │                │
+└─────────┼────────────────┼─────────────────┼────────────────┘
+          │                │                 │
+          ▼                ▼                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│              L2: Redis (1-2ms latency)                        │
+│  ┌─────────┐  ┌──────┐  ┌────────┐  ┌────────┐  ┌────────┐ │
+│  │  Cache  │  │ Locks │  │Streams │  │Pub/Sub │  │  Geo   │ │
+│  └─────────┘  └──────┘  └────────┘  └────────┘  └────────┘ │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+                            ▼
+                   ┌────────────────┐
+                   │   H2/Postgres  │
+                   │   Database     │
+                   └────────────────┘
+```
+
+## 📊 RedisTemplate vs Direct Lettuce
 
 This project uses two different approaches to interact with Redis, each with its own trade-offs:
 
@@ -41,9 +132,210 @@ This approach involves bypassing `RedisTemplate` and using the Lettuce client di
 
 ---
 
-## Features Implemented
+---
 
-The application showcases the following Redis capabilities through dedicated controllers and services:
+## 📦 Environment Profiles
+
+The application supports three deployment profiles optimized for different environments:
+
+### 🖥️ Local Profile (`local`) - 8GB Laptop Friendly
+
+**Purpose**: Zero-setup development on resource-constrained machines
+
+**Configuration** (`application-local.yml`):
+```yaml
+# Resource Footprint: ~500-800MB total
+spring:
+  redis:
+    # Embedded Redis (auto-starts on port 6370)
+    host: localhost
+    port: 6370
+  
+  datasource:
+    # Embedded H2 database
+    url: jdbc:h2:mem:testdb
+  
+  lettuce:
+    pool:
+      max-active: 5      # vs prod: 20
+      max-idle: 3        # vs prod: 10
+      min-idle: 1        # vs prod: 5
+  
+  cache:
+    redis:
+      time-to-live: 300s # 5 min vs prod: 10 min
+```
+
+**Key Features**:
+- ✅ Embedded Redis (no external setup required)
+- ✅ H2 in-memory database
+- ✅ Reduced connection pools (max 5 vs prod 20)
+- ✅ Minimal thread pools
+- ✅ Shorter cache TTLs
+- ✅ Tracing disabled (lower overhead)
+- ✅ Kafka disabled (uses Redis pub/sub only)
+
+**Run Locally**:
+```bash
+./gradlew bootRun --args='--spring.profiles.active=local'
+```
+
+### 🔧 Development Profile (`dev`) - Default
+
+**Purpose**: Local development with external Redis
+
+**Configuration** (`application-dev.yml`):
+```yaml
+# Resource Footprint: ~1-1.5GB
+spring:
+  redis:
+    host: localhost
+    port: 6379  # External Redis required
+  
+  datasource:
+    url: jdbc:h2:mem:devdb
+  
+  lettuce:
+    pool:
+      max-active: 10
+      max-idle: 5
+  
+  cache:
+    redis:
+      time-to-live: 600s # 10 min
+```
+
+**Requirements**:
+- External Redis running on `localhost:6379`
+- H2 database (in-memory)
+
+**Run Dev**:
+```bash
+# Start Redis first
+docker run -p 6379:6379 redis:7-alpine
+
+# Run application
+./gradlew bootRun  # dev is default profile
+```
+
+### 🚀 Production Profile (`prod`)
+
+**Purpose**: Production deployment with full stack
+
+**Configuration** (`application-prod.yml`):
+```yaml
+spring:
+  redis:
+    host: ${REDIS_HOST:redis-cluster}
+    port: ${REDIS_PORT:6379}
+    ssl: true
+    password: ${REDIS_PASSWORD}
+  
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/${DB_NAME:redispoc}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
+  
+  lettuce:
+    pool:
+      max-active: 20
+      max-idle: 10
+      min-idle: 5
+```
+
+**Requirements**:
+- Redis Cluster or standalone with SSL/TLS
+- PostgreSQL database
+- Kafka cluster (for event streaming)
+- EventStoreDB (optional, for advanced event sourcing)
+
+**Run Production**:
+```bash
+export SPRING_PROFILES_ACTIVE=prod
+export REDIS_HOST=your-redis-host
+export REDIS_PASSWORD=your-password
+export DB_HOST=your-db-host
+export DB_USERNAME=your-username
+export DB_PASSWORD=your-password
+
+./gradlew bootRun
+```
+
+### Profile Comparison Table
+
+| Feature | Local | Dev | Prod |
+|---------|-------|-----|------|
+| **Redis** | Embedded (port 6370) | External (6379) | Cluster + SSL |
+| **Database** | H2 (in-memory) | H2 (in-memory) | PostgreSQL |
+| **Kafka** | Disabled | Disabled | Enabled |
+| **Connection Pool** | 5 max | 10 max | 20 max |
+| **Cache TTL** | 5 min | 10 min | 10 min |
+| **Tracing** | Disabled | Enabled | Enabled |
+| **Memory Usage** | ~500MB | ~1.5GB | ~2-3GB |
+| **Startup Time** | ~10s | ~15s | ~20s |
+
+---
+
+## 🎯 Quick Start
+
+### Option 1: Local Profile (Recommended for Beginners)
+
+```bash
+# Clone repository
+git clone <repository-url>
+cd RedisPOC
+
+# Run with local profile (zero setup required)
+./gradlew bootRun --args='--spring.profiles.active=local'
+
+# Application starts with embedded Redis on http://localhost:8080
+```
+
+### Option 2: Dev Profile
+
+```bash
+# Start Redis
+docker run -d -p 6379:6379 --name redis redis:7-alpine
+
+# Run application
+./gradlew bootRun
+
+# Or specify profile explicitly
+./gradlew bootRun --args='--spring.profiles.active=dev'
+```
+
+### Option 3: Full Stack with Docker Compose
+
+```bash
+# Start all services (Redis, PostgreSQL, Kafka)
+docker-compose up -d
+
+# Run application in prod mode
+export SPRING_PROFILES_ACTIVE=prod
+./gradlew bootRun
+```
+
+### Verify Application
+
+```bash
+# Check health
+curl http://localhost:8080/actuator/health
+
+# Test basic endpoint
+curl http://localhost:8080/api/products
+
+# View metrics
+curl http://localhost:8080/actuator/metrics
+```
+
+---
+
+## ✨ Features Implemented
+
+### 1. Hybrid Caching Strategy
 
 - **Caching & Basic Operations**: Using `RedisTemplate` for simple key-value storage, retrieval, and deletion (via `RedisTemplateExampleController` and `RedisTemplateExampleService`).
 - **Advanced Lettuce Client**: Direct Lettuce usage with resilience patterns (Circuit Breaker, Bulkhead, Time Limiter) via `AdvancedLettuceController` and `AdvancedLettuceClientService`.

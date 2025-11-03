@@ -29,6 +29,12 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
     implementation 'org.springframework.boot:spring-boot-starter-security'
+    
+    // Kafka for event streaming (higher environments only - disabled in local/dev profiles)
+    implementation 'org.springframework.kafka:spring-kafka'
+    
+    // Caffeine Cache for L1 off-heap caching (hybrid caching with Redis as L2)
+    implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
 
     // Resilience4j - Fault Tolerance
     implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.3.0'
@@ -56,6 +62,9 @@ dependencies {
     // Redis Client
     implementation 'io.lettuce:lettuce-core'
     implementation 'org.apache.commons:commons-pool2'
+    
+    // Embedded Redis for 'local' profile (zero-setup local development)
+    implementation 'it.ozimov:embedded-redis:0.7.3'
 
     // JSON Utilities
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
@@ -65,6 +74,16 @@ dependencies {
 
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    
+    // Testcontainers for integration testing with real Redis/PostgreSQL
+    testImplementation 'org.testcontainers:testcontainers:1.19.3'
+    testImplementation 'org.testcontainers:junit-jupiter:1.19.3'
+    testImplementation 'org.testcontainers:postgresql:1.19.3'
+    testImplementation 'org.testcontainers:kafka:1.19.3'
+    
+    // Mockito for advanced mocking scenarios
+    testImplementation 'org.mockito:mockito-inline:5.2.0'
 
     // EventStoreDB Java Client
     implementation 'com.eventstore:db-client-java:5.4.5'

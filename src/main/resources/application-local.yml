@@ -1,0 +1,313 @@
+# ===============================================================================
+# application-local.yml
+# -------------------------------------------------------------------------------
+# Profile: local (minimal resource footprint for 8GB RAM laptops)
+# Usage: Activated when spring.profiles.active=local or SPRING_PROFILES_ACTIVE=local
+# Purpose: Absolute minimal setup for local development on resource-constrained machines.
+#          Uses embedded H2 database and embedded Redis (it4e) to avoid external dependencies.
+# -------------------------------------------------------------------------------
+# Resource Footprint: Optimized for 8GB RAM laptops
+# - H2 Database: In-memory, ~50-100MB
+# - Embedded Redis: ~100-200MB
+# - Application: ~300-500MB with minimal thread pools
+# - Total: ~500-800MB (leaving 7GB+ for OS and other applications)
+# -------------------------------------------------------------------------------
+# Key Differences from 'dev' Profile:
+# - dev: Requires external Redis server (localhost:6379)
+# - local: Uses embedded Redis (it4e library) - no external setup needed
+# - local: Reduced connection pools, thread pools, and cache sizes
+# - local: Disabled some heavy features (event sourcing with EventStoreDB, tracing)
+# -------------------------------------------------------------------------------
+# When to Use:
+# - Local development on laptops/machines with 8GB RAM or less
+# - Quick prototyping without external service dependencies
+# - Offline development (no Redis/PostgreSQL installation required)
+# - Testing basic functionality without performance concerns
+# -------------------------------------------------------------------------------
+# DO NOT USE for:
+# - Load testing or performance benchmarking
+# - Production-like testing (use 'dev' or 'prod' profiles)
+# - Multi-instance/distributed scenarios
+# - Testing Redis cluster features
+# ===============================================================================
+
+spring:
+  # ---------------------------------------------------------------------------
+  # H2 Database Configuration (in-memory, minimal footprint)
+  # ---------------------------------------------------------------------------
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE # Keep data during session
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: '' # No password for local H2
+    hikari:
+      # Minimal connection pool for local development (default is 10)
+      maximum-pool-size: 3 # Reduced from default 10 to save memory
+      minimum-idle: 1 # Minimal idle connections
+      connection-timeout: 10000 # 10 seconds
+  
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update # Auto-migrate schema on startup
+    show-sql: false # Disabled to reduce console noise; set to true for debugging
+    properties:
+      hibernate:
+        format_sql: false # Disabled for performance
+        use_sql_comments: false
+
+  # ---------------------------------------------------------------------------
+  # Redis Configuration (embedded Redis using it4e library)
+  # ---------------------------------------------------------------------------
+  # NOTE: Embedded Redis (it4e) starts automatically on application startup.
+  # No external Redis installation required!
+  # Port 6370 is used to avoid conflicts with system Redis on 6379.
+  # ---------------------------------------------------------------------------
+  data:
+    redis:
+      host: localhost
+      port: 6370 # Embedded Redis port (avoid conflict with system Redis on 6379)
+      # password not needed for embedded Redis
+      timeout: 2s # Shorter timeout for local
+      connect-timeout: 3s
+      lettuce:
+        pool:
+          # Minimal connection pool for local development
+          max-active: 5 # Reduced from prod's 20
+          max-idle: 3 # Reduced from prod's 10
+          min-idle: 1 # Minimal idle connections
+          max-wait: 2s # Shorter wait time
+        shutdown-timeout: 1s # Quick shutdown
+  
+  redis:
+    host: localhost
+    port: 6370
+    timeout: 2s
+    stream:
+      product-events: product:events:stream
+      orders:
+        max-length: 100 # Reduced from dev's 1000 to save memory
+        idempotency-ttl-seconds: 600 # Shorter TTL (10 minutes) to save memory
+
+  # ---------------------------------------------------------------------------
+  # Cache Configuration (minimal cache sizes)
+  # ---------------------------------------------------------------------------
+  cache:
+    type: redis
+    cache-names:
+      - products
+      - product-details
+    redis:
+      time-to-live: 300000 # 5 minutes (reduced from dev's 10 minutes)
+      cache-null-values: false
+
+  # ---------------------------------------------------------------------------
+  # Task Execution (minimal thread pools)
+  # ---------------------------------------------------------------------------
+  task:
+    execution:
+      pool:
+        core-size: 2 # Minimal threads (default is typically 8)
+        max-size: 4 # Lower max (default is typically 16)
+        queue-capacity: 50 # Smaller queue
+    scheduling:
+      pool:
+        size: 2 # Minimal scheduling threads (default is 1, but we have multiple @Scheduled tasks)
+
+# -------------------------------------------------------------------------------
+# EventStoreDB Configuration (DISABLED for local to save resources)
+# -------------------------------------------------------------------------------
+# NOTE: EventStoreDB features are disabled in local profile to reduce resource usage.
+# To enable: Install EventStoreDB locally and uncomment the configuration below.
+# -------------------------------------------------------------------------------
+eventstoredb:
+  enabled: false # Disabled by default for local
+  # uri: esdb://localhost:2113?tls=false # Uncomment if you install EventStoreDB locally
+  # username: admin
+  # password: changeit
+
+# -------------------------------------------------------------------------------
+# Rate Limiting Configuration (relaxed for local development)
+# -------------------------------------------------------------------------------
+ratelimit:
+  capacity: 20 # Higher capacity for testing (less restrictive)
+  rate: 10 # More generous refill rate
+  refill-period: 1s
+  paths: /api/ratelimit/** # Only apply to specific rate-limit test endpoints
+  excluded-paths: /actuator/**,/api/public/**,/api/products/**,/api/auth/** # Exclude most endpoints
+  # User rate limits (authenticated users get more generous limits)
+  user-capacity: 100 # Very generous for local testing
+  user-rate: 50
+
+# -------------------------------------------------------------------------------
+# Resilience4j Configuration (simplified for local)
+# -------------------------------------------------------------------------------
+resilience4j:
+  circuitbreaker:
+    instances:
+      redis-resilience:
+        sliding-window-type: count-based
+        sliding-window-size: 5 # Smaller window
+        failure-rate-threshold: 60 # More tolerant (60% vs prod's 30%)
+        wait-duration-in-open-state: 5s # Shorter recovery time
+        permitted-number-of-calls-in-half-open-state: 2
+        minimum-number-of-calls: 3 # Lower minimum
+        record-exceptions:
+          - io.lettuce.core.RedisConnectionException
+          - io.lettuce.core.RedisCommandTimeoutException
+          - java.util.concurrent.TimeoutException
+  
+  bulkhead:
+    instances:
+      redis-resilience:
+        max-concurrent-calls: 5 # Reduced from dev's 2
+        max-wait-duration: 500ms # Shorter wait
+  
+  timelimiter:
+    instances:
+      redis-resilience:
+        timeout-duration: 3s # Longer timeout for slower local machines
+        cancel-running-future: true
+  
+  retry:
+    instances:
+      redis-resilience:
+        max-attempts: 2 # Fewer retries
+        wait-duration: 500ms # Shorter wait between retries
+        exponential-backoff-multiplier: 1.5 # Less aggressive backoff
+        retry-exceptions:
+          - io.lettuce.core.RedisConnectionException
+          - io.lettuce.core.RedisCommandTimeoutException
+          - java.util.concurrent.TimeoutException
+
+# -------------------------------------------------------------------------------
+# JWT Configuration (local development with simple secret)
+# -------------------------------------------------------------------------------
+jwt:
+  secret: local-dev-secret-key-min-32-chars-for-hs256-algorithm-compliance # Safe for local only
+  expiration: 7200 # 2 hours (longer for convenient local development)
+  revocation-namespace: local # Separate namespace for local
+
+product:
+  events:
+    idempotency-ttl-seconds: 3600 # 1 hour (reduced from dev's 24 hours)
+
+security:
+  auth:
+    login:
+      fail-threshold: 10 # More lenient for local development
+      lockout-seconds: 60 # Shorter lockout (1 minute)
+
+# -------------------------------------------------------------------------------
+# Management and Monitoring (minimal for local)
+# -------------------------------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus # Same as dev
+  endpoint:
+    health:
+      show-details: always # Always show details for debugging
+  metrics:
+    export:
+      prometheus:
+        enabled: true # Keep Prometheus metrics enabled
+        step: 60s # Less frequent updates to save resources
+  tracing:
+    enabled: false # DISABLED to save resources - no distributed tracing in local
+    sampling:
+      probability: 0.0 # No sampling
+
+# -------------------------------------------------------------------------------
+# Logging Configuration (optimized for local development)
+# -------------------------------------------------------------------------------
+logging:
+  level:
+    root: INFO
+    com.redis.poc: DEBUG # Detailed logging for application code
+    org.springframework.data.redis: INFO # Less verbose Redis logging
+    io.lettuce: WARN # Minimal Lettuce logging
+    org.springframework.cache: DEBUG # Cache logging for debugging
+    org.hibernate: INFO # Minimal Hibernate logging
+    org.hibernate.SQL: false # Disable SQL logging by default
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n" # Shorter timestamp for local
+  file:
+    name: logs/local-redis-poc.log # Local log file
+    max-size: 50MB # Smaller log files
+    max-history: 3 # Keep only 3 log files
+
+# -------------------------------------------------------------------------------
+# Server Configuration (minimal resources)
+# -------------------------------------------------------------------------------
+server:
+  port: 8080
+  tomcat:
+    threads:
+      max: 50 # Reduced from default 200
+      min-spare: 5 # Minimal spare threads
+    max-connections: 2000 # Reduced from default 8192
+    accept-count: 50 # Smaller accept queue
+  compression:
+    enabled: true # Enable compression to save bandwidth
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+
+# ===============================================================================
+# MIGRATION GUIDE: Moving from 'local' to 'dev' or 'prod'
+# ===============================================================================
+# When you're ready to test with real Redis or deploy to higher environments:
+#
+# 1. MOVE TO 'dev' PROFILE (external Redis, still using H2):
+#    - Set SPRING_PROFILES_ACTIVE=dev
+#    - Install and start Redis: `docker run -p 6379:6379 redis:alpine` or `redis-server`
+#    - Advantages: Real Redis behavior, better for integration testing
+#
+# 2. MOVE TO 'prod' PROFILE (external Redis + PostgreSQL):
+#    - Set SPRING_PROFILES_ACTIVE=prod
+#    - Install PostgreSQL and create database
+#    - Set environment variables: DB_HOST, DB_USER, DB_PASSWORD, REDIS_HOST, REDIS_PASSWORD
+#    - Advantages: Production-like environment, realistic performance testing
+#
+# 3. INTEGRATE KAFKA (for higher environments only):
+#    - Install Kafka: `docker run -p 9092:9092 apache/kafka`
+#    - Add spring-kafka dependency to build.gradle
+#    - Configure Kafka in application-prod.yml (see Kafka section below)
+#    - Use Kafka for: Event streaming, CDC (Change Data Capture), distributed event bus
+#
+# 4. INTEGRATE POSTGRESQL (replace H2):
+#    - Install PostgreSQL locally or use Docker
+#    - Update datasource.url to PostgreSQL JDBC URL
+#    - Change JPA dialect to PostgreSQLDialect
+#    - Set hibernate.ddl-auto to 'validate' (never 'update' in prod!)
+#
+# 5. RESOURCE REQUIREMENTS BY PROFILE:
+#    - local: 8GB RAM minimum (uses ~800MB)
+#    - dev: 16GB RAM recommended (external Redis + H2, uses ~1.5GB)
+#    - prod: 32GB RAM recommended (PostgreSQL + Redis + monitoring, uses ~3-4GB)
+# ===============================================================================
+
+# ===============================================================================
+# EMBEDDED REDIS CONFIGURATION NOTES
+# ===============================================================================
+# This profile uses 'it.ozimov:embedded-redis' library for zero-setup Redis.
+# 
+# ADVANTAGES:
+# - No external Redis installation required
+# - Automatic start/stop with application
+# - Perfect for quick prototyping and offline development
+# - Consistent environment across developer machines
+#
+# LIMITATIONS:
+# - Single instance only (no cluster mode)
+# - Limited to ~100MB dataset
+# - Not suitable for performance testing
+# - Some Redis modules may not be available
+# - Persistence is not supported (data lost on restart)
+#
+# TO DISABLE EMBEDDED REDIS AND USE EXTERNAL:
+# - Remove @Profile("local") from EmbeddedRedisConfiguration (if exists)
+# - Change redis.host to your external Redis host
+# - Change redis.port to 6379 (or your external Redis port)
+# - Start external Redis before running the application
+# ===============================================================================
